@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Resume from './pages/Resume';
@@ -7,6 +7,13 @@ import ProtectedRoute from './components/ProtectedRoute';
 
 // 路由拦截组件
 function RouteInterceptor() {
+  const location = useLocation();
+  
+  // 如果路径包含 /api/pdf，不做拦截处理
+  if (location.pathname.includes('/api/pdf')) {
+    return null;
+  }
+  
   // 检查是否有token和登录状态
   const token = sessionStorage.getItem('token');
   const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';

@@ -321,7 +321,7 @@ ${resumeText}
     });
 
     const analysisText = completion.choices[0].message.content;
-    
+    console.log(analysisText, '调试---analysisText');
     // Extract JSON from the response
     const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -512,7 +512,36 @@ function isValidName(name) {
 // API Routes
 
 // Upload and process resumes
-app.post('/api/upload', upload.single('file'), async (req, res) => {
+app.post('/api/upload', upload.array('files', 20), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      // 尝试单文件上传的兼容性
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    const { jobDescription } = req.body;
+    if (!jobDescription || !jobDescription.trim()) {
+      return res.status(400).json({ error: 'Job description is required' });
+    }
+
+    const jobId = uuidv4();
+    
+    // Start processing in background
+    processMultipleFiles(req.files, jobId, jobDescription.trim());
+    
+    res.json({ 
+      message: `Files uploaded successfully. Processing ${req.files.length} file(s).`,
+      jobId: jobId,
+      fileCount: req.files.length
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: 'Failed to upload files' });
+  }
+});
+
+// 兼容单文件上传的端点
+app.post('/api/upload-single', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -550,13 +579,150 @@ app.get('/api/results/:jobId', (req, res) => {
   }
 });
 
-// Process resumes in background
+// Process multiple files (new function for handling multiple PDF uploads)
+async function processMultipleFiles(uploadedFiles, jobId, jobDescription) {
+  try {
+    // Update status to processing
+    candidatesCache.set(jobId, { status: 'processing', candidates: [], jobDescription });
+    
+    let pdfFiles = [];
+    const savedPdfFiles = new Map(); // Track saved PDF files
+    
+    console.log(`Processing ${uploadedFiles.length} uploaded file(s)`);
+    
+    // Process each uploaded file
+    for (const uploadedFile of uploadedFiles) {
+      const fileExtension = path.extname(uploadedFile.path).toLowerCase();
+      
+      if (fileExtension === '.pdf') {
+        // Handle PDF file
+        console.log(`Processing PDF file: ${uploadedFile.originalname}`);
+        const pdfBuffer = await fs.readFile(uploadedFile.path);
+        
+        // Use original filename for display (decode if needed)
+        let displayName = uploadedFile.originalname;
+        try {
+          displayName = decodeFilename(uploadedFile.originalname);
+        } catch (error) {
+          console.log(`Failed to decode filename: ${uploadedFile.originalname}`);
+        }
+        
+        pdfFiles.push({
+          filename: displayName,
+          buffer: pdfBuffer,
+          savedPath: uploadedFile.path
+        });
+        
+        savedPdfFiles.set(displayName, uploadedFile.path);
+        
+      } else if (fileExtension === '.zip') {
+        // Handle ZIP file - extract PDFs
+        console.log(`Processing ZIP file: ${uploadedFile.originalname}`);
+        const extractedPdfs = await extractZipFile(uploadedFile.path);
+        
+        // Save extracted PDF files for later access
+        for (const pdfFile of extractedPdfs) {
+          const safeName = `${jobId}-${Date.now()}-${pdfFile.filename}`;
+          const savedPath = path.join(uploadsDir, safeName);
+          await fs.writeFile(savedPath, pdfFile.buffer);
+          pdfFile.savedPath = savedPath;
+          savedPdfFiles.set(pdfFile.filename, savedPath);
+          console.log(`Saved extracted PDF: ${pdfFile.filename} -> ${safeName}`);
+        }
+        
+        pdfFiles = pdfFiles.concat(extractedPdfs);
+        
+        // Clean up ZIP file after extraction
+        fs.remove(uploadedFile.path);
+        
+      } else {
+        console.log(`Skipping unsupported file: ${uploadedFile.originalname}`);
+      }
+    }
+    
+    if (pdfFiles.length === 0) {
+      throw new Error('No valid PDF files found');
+    }
+    
+    console.log(`Found ${pdfFiles.length} PDF file(s) to process`);
+    
+    const candidates = [];
+    
+    // Process each PDF
+    for (let i = 0; i < pdfFiles.length; i++) {
+      const pdfFile = pdfFiles[i];
+      console.log(`Processing ${pdfFile.filename} (${i + 1}/${pdfFiles.length})`);
+      
+      // Extract text from PDF
+      const resumeText = await extractTextFromPDF(pdfFile.buffer);
+      
+      if (resumeText.trim()) {
+        // Analyze with AI using the job description
+        const analysis = await analyzeResume(resumeText, pdfFile.filename, jobDescription);
+        // Add jobId to candidate data for PDF access
+        analysis.jobId = jobId;
+        analysis.hasPdf = true;
+        candidates.push(analysis);
+        
+        // Update cache with current progress
+        candidatesCache.set(jobId, {
+          status: 'processing',
+          candidates: [...candidates],
+          progress: Math.round(((i + 1) / pdfFiles.length) * 100),
+          jobDescription,
+          savedPdfFiles: Object.fromEntries(savedPdfFiles)
+        });
+      }
+    }
+    
+    // Sort candidates by score (highest first)
+    candidates.sort((a, b) => b.score - a.score);
+    
+    // Assign ranks
+    candidates.forEach((candidate, index) => {
+      candidate.rank = index + 1;
+    });
+    
+    // Update cache with final results
+    candidatesCache.set(jobId, {
+      status: 'completed',
+      candidates: candidates,
+      progress: 100,
+      totalProcessed: candidates.length,
+      jobDescription,
+      savedPdfFiles: Object.fromEntries(savedPdfFiles)
+    });
+    
+    console.log(`Processing completed for job ${jobId}. Processed ${candidates.length} candidates.`);
+    
+    // Clean up uploaded PDF files that were directly uploaded (not extracted from ZIP)
+    for (const uploadedFile of uploadedFiles) {
+      const fileExtension = path.extname(uploadedFile.path).toLowerCase();
+      if (fileExtension === '.pdf') {
+        // Keep PDF files for later serving, don't delete them
+        console.log(`Keeping uploaded PDF file: ${uploadedFile.path}`);
+      }
+    }
+    
+  } catch (error) {
+    console.error('Processing error:', error);
+    candidatesCache.set(jobId, {
+      status: 'error',
+      error: error.message,
+      candidates: [],
+      jobDescription
+    });
+  }
+}
+
+// Process resumes in background (existing function for single file/ZIP compatibility)
 async function processResumes(filePath, jobId, jobDescription) {
   try {
     // Update status to processing
     candidatesCache.set(jobId, { status: 'processing', candidates: [], jobDescription });
     
     let pdfFiles = [];
+    const savedPdfFiles = new Map(); // Track saved PDF files
     
     // Check if the file is a PDF or ZIP
     const fileExtension = path.extname(filePath).toLowerCase();
@@ -573,12 +739,25 @@ async function processResumes(filePath, jobId, jobDescription) {
       
       pdfFiles = [{
         filename: displayName, // Use original filename for display
-        buffer: pdfBuffer
+        buffer: pdfBuffer,
+        savedPath: filePath // Keep reference to saved file
       }];
+      
+      savedPdfFiles.set(displayName, filePath);
     } else if (fileExtension === '.zip') {
       // Handle ZIP file with multiple PDFs
       console.log('Processing ZIP file');
       pdfFiles = await extractZipFile(filePath);
+      
+      // Save extracted PDF files for later access
+      for (const pdfFile of pdfFiles) {
+        const safeName = `${jobId}-${Date.now()}-${pdfFile.filename}`;
+        const savedPath = path.join(uploadsDir, safeName);
+        await fs.writeFile(savedPath, pdfFile.buffer);
+        pdfFile.savedPath = savedPath;
+        savedPdfFiles.set(pdfFile.filename, savedPath);
+        console.log(`Saved PDF: ${pdfFile.filename} -> ${safeName}`);
+      }
     } else {
       throw new Error('Unsupported file format');
     }
@@ -598,6 +777,9 @@ async function processResumes(filePath, jobId, jobDescription) {
       if (resumeText.trim()) {
         // Analyze with AI using the job description
         const analysis = await analyzeResume(resumeText, pdfFile.filename, jobDescription);
+        // Add jobId to candidate data for PDF access
+        analysis.jobId = jobId;
+        analysis.hasPdf = true;
         candidates.push(analysis);
         
         // Update cache with current progress
@@ -605,7 +787,8 @@ async function processResumes(filePath, jobId, jobDescription) {
           status: 'processing',
           candidates: [...candidates],
           progress: Math.round(((i + 1) / pdfFiles.length) * 100),
-          jobDescription
+          jobDescription,
+          savedPdfFiles: Object.fromEntries(savedPdfFiles)
         });
       }
     }
@@ -624,13 +807,16 @@ async function processResumes(filePath, jobId, jobDescription) {
       candidates: candidates,
       progress: 100,
       totalProcessed: candidates.length,
-      jobDescription
+      jobDescription,
+      savedPdfFiles: Object.fromEntries(savedPdfFiles)
     });
     
     console.log(`Processing completed for job ${jobId}. Processed ${candidates.length} candidates.`);
     
-    // Clean up uploaded file
-    fs.remove(filePath);
+    // Clean up original uploaded file (but keep extracted PDFs)
+    if (fileExtension === '.zip') {
+      fs.remove(filePath);
+    }
     
   } catch (error) {
     console.error('Processing error:', error);
@@ -652,9 +838,129 @@ app.get('/api/jobs', (req, res) => {
   res.json(jobs);
 });
 
+// Serve PDF files
+app.get('/api/pdf/:jobId/:candidateId', (req, res) => {
+  const { jobId, candidateId } = req.params;
+  console.log('=== PDF Request ===');
+  console.log('JobId:', jobId);
+  console.log('CandidateId:', candidateId);
+  console.log('Available jobs in cache:', Array.from(candidatesCache.keys()));
+  
+  // Get job data from cache
+  const jobData = candidatesCache.get(jobId);
+  if (!jobData) {
+    console.log('Job not found in cache. Available jobs:', Array.from(candidatesCache.keys()));
+    return res.status(404).json({ 
+      error: 'Job not found',
+      availableJobs: Array.from(candidatesCache.keys()),
+      requestedJobId: jobId
+    });
+  }
+  
+  console.log('Job found. Status:', jobData.status);
+  console.log('Number of candidates:', jobData.candidates ? jobData.candidates.length : 0);
+  
+  // Find candidate
+  const candidate = jobData.candidates.find(c => c.id === candidateId);
+  if (!candidate) {
+    const availableCandidateIds = jobData.candidates.map(c => ({ id: c.id, name: c.name }));
+    console.log('Candidate not found. Available candidates:', availableCandidateIds);
+    return res.status(404).json({ 
+      error: 'Candidate not found',
+      availableCandidates: availableCandidateIds,
+      requestedCandidateId: candidateId
+    });
+  }
+  
+  console.log('Candidate found:', candidate.name, 'Has PDF:', candidate.hasPdf);
+  
+  if (!candidate.hasPdf) {
+    return res.status(404).json({ error: 'No PDF available for this candidate' });
+  }
+  
+  // Try to find PDF file using saved file paths
+  let filePath = null;
+  
+  if (jobData.savedPdfFiles && jobData.savedPdfFiles[candidate.filename]) {
+    filePath = jobData.savedPdfFiles[candidate.filename];
+    console.log('Found PDF path from savedPdfFiles:', filePath);
+  } else {
+    console.log('Searching for PDF in uploads directory...');
+    // Fallback: search in uploads directory
+    const uploadsFiles = fs.readdirSync(uploadsDir);
+    console.log('Files in uploads directory:', uploadsFiles);
+    
+    const pdfFile = uploadsFiles.find(file => {
+      // Match files containing the candidate's filename or jobId
+      const baseFilename = candidate.filename.replace(/\.pdf$/i, '');
+      return (file.includes(baseFilename) || file.includes(jobId)) && file.endsWith('.pdf');
+    });
+    
+    if (pdfFile) {
+      filePath = path.join(uploadsDir, pdfFile);
+      console.log('Found PDF file in uploads:', pdfFile);
+    } else {
+      console.log('No matching PDF file found in uploads directory');
+    }
+  }
+  
+  if (!filePath || !fs.existsSync(filePath)) {
+    console.log('PDF file not found on disk:', filePath);
+    return res.status(404).json({ 
+      error: 'PDF file not found on disk',
+      searchedPath: filePath,
+      candidateFilename: candidate.filename
+    });
+  }
+  
+  console.log('Serving PDF file:', filePath);
+  
+  // Clean filename for HTTP header - remove special characters and encode properly
+  const safeFilename = candidate.filename
+    .replace(/[^\w\s\-\.]/g, '') // Remove special characters except word chars, spaces, hyphens, and dots
+    .replace(/\s+/g, '_') // Replace spaces with underscores
+    .trim();
+  
+  // Set appropriate headers for PDF
+  res.setHeader('Content-Type', 'application/pdf');
+  // Use encodeURIComponent for proper encoding and provide fallback filename
+  res.setHeader('Content-Disposition', `inline; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(candidate.filename)}`);
+  res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+  
+  // Send the file
+  res.sendFile(path.resolve(filePath));
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Debug endpoint to check cache status
+app.get('/api/debug/cache', (req, res) => {
+  const cacheInfo = {
+    totalJobs: candidatesCache.size,
+    jobs: []
+  };
+  
+  for (const [jobId, jobData] of candidatesCache.entries()) {
+    cacheInfo.jobs.push({
+      jobId,
+      status: jobData.status,
+      candidatesCount: jobData.candidates ? jobData.candidates.length : 0,
+      hasJobDescription: !!jobData.jobDescription,
+      hasSavedPdfFiles: !!jobData.savedPdfFiles,
+      savedPdfFilesCount: jobData.savedPdfFiles ? Object.keys(jobData.savedPdfFiles).length : 0,
+      candidates: jobData.candidates ? jobData.candidates.map(c => ({
+        id: c.id,
+        name: c.name,
+        filename: c.filename,
+        hasPdf: c.hasPdf
+      })) : []
+    });
+  }
+  
+  res.json(cacheInfo);
 });
 
 // Start server
