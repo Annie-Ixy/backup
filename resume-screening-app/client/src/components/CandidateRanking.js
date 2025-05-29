@@ -272,7 +272,7 @@ const CandidateRanking = ({ candidates, jobDescription, onStartOver }) => {
                         {candidate.tier}
                       </div>
                       {/* View PDF Button */}
-                      {candidate.hasPdf && jobId && (
+                      {/* {candidate.hasPdf && jobId && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -284,7 +284,7 @@ const CandidateRanking = ({ candidates, jobDescription, onStartOver }) => {
                           <FileText size={12} />
                           <span>查看完整简历</span>
                         </button>
-                      )}
+                      )} */}
                     </div>
                   </div>
 
