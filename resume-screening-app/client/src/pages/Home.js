@@ -16,12 +16,17 @@ import {
 import { isLogin } from '../utils/index.ts';
 
 function Home() {
+  let isLoginIndex = 0;
  useEffect(() => {
-  isLogin().then(res => {
+  if (isLoginIndex === 0) {
+    isLoginIndex++;
+    isLogin().then(res => {
     if (!res) {
+      sessionStorage.removeItem('token');
       navigate('/login');
     }
   })
+  }
  }, [])
 
   const navigate = useNavigate();
