@@ -35,7 +35,7 @@ async function testWithExistingResumes() {
     while (!completed) {
       await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
       
-      const resultResponse = await axios.get(`http://localhost:5000/api/results/${jobId}`);
+      const resultResponse = await axios.get(`http://localhost:9001/api/results/${jobId}`);
       const data = resultResponse.data;
       
       console.log(`Status: ${data.status}, Progress: ${data.progress || 0}%, Candidates: ${data.candidates?.length || 0}`);

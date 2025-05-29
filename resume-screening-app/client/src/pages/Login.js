@@ -1,23 +1,82 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, User, Lock } from 'lucide-react';
+import { LogIn, User, Lock, Loader2 } from 'lucide-react';
+import { api } from '../utils/request';
+import CryptoJS from 'crypto-js';
 
 function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  // 检查是否已经有token，如果有就直接跳转到home页面
+  useEffect(() => {
+    const token = sessionStorage.getItem('token');
+    if (token) {
+      navigate('/home');
+    }
+    
+    // 读取保存的账号密码
+    const savedUsername = localStorage.getItem('savedUsername');
+    const savedPassword = localStorage.getItem('savedPassword');
+    const savedRememberMe = localStorage.getItem('rememberMe') === 'true';
+    
+    if (savedRememberMe && savedUsername && savedPassword) {
+      setUsername(savedUsername);
+      setPassword(savedPassword);
+      setRememberMe(true);
+    }
+  }, [navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // 防止重复提交
+    if (isLoading) return;
+    
     // 简单的登录验证，实际项目中应该调用API
     if (username && password) {
+      setIsLoading(true);
+      
       // 存储登录状态
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('username', username);
-      navigate('/home');
-    } else {
-      alert('请输入用户名和密码');
+      
+      // 处理记住账号密码
+      if (rememberMe) {
+        localStorage.setItem('savedUsername', username);
+        localStorage.setItem('savedPassword', password);
+        localStorage.setItem('rememberMe', 'true');
+      } else {
+        localStorage.removeItem('savedUsername');
+        localStorage.removeItem('savedPassword');
+        localStorage.removeItem('rememberMe');
+      }
+      
+      try {
+        // 对密码进行MD5加密
+        const passwordMd5 = CryptoJS.enc.Utf8.parse(password);
+        const encryptedPassword = CryptoJS.enc.Base64.stringify(passwordMd5);
+        
+        const res = await api.post('/dev-api/udap/admin/login', {
+          username,
+          password: encryptedPassword
+        })
+        if (res.code === 0) {
+            sessionStorage.setItem('token', res.data.token);
+            navigate('/home');
+        } else {
+            alert(res.msg);
+        }
+      } catch (error) {
+        console.log(error);
+        alert('登录失败，请检查网络连接');
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -44,9 +103,6 @@ function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-              用户名
-            </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
@@ -55,16 +111,13 @@ function Login() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="请输入用户名"
+                placeholder="请输入用户名/邮箱"
                 required
               />
             </div>
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              密码
-            </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
@@ -78,22 +131,40 @@ function Login() {
               />
             </div>
           </div>
+          <div className="flex items-center">
+            <input
+              id="rememberMe"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700">
+              记住账号密码
+            </label>
+          </div>
 
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: isLoading ? 1 : 1.02 }}
+            whileTap={{ scale: isLoading ? 1 : 0.98 }}
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            disabled={isLoading}
+            className={`w-full py-3 px-4 rounded-lg font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center justify-center ${
+              isLoading 
+                ? 'bg-blue-400 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700'
+            } text-white`}
           >
-            登录
+            {isLoading ? (
+              <>
+                <Loader2 className="animate-spin h-5 w-5 mr-2" />
+                登录中...
+              </>
+            ) : (
+              '登录'
+            )}
           </motion.button>
         </form>
-
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            演示账号：任意用户名和密码即可登录
-          </p>
-        </div>
       </motion.div>
     </div>
   );

@@ -5,12 +5,24 @@ import Home from './pages/Home';
 import Resume from './pages/Resume';
 import ProtectedRoute from './components/ProtectedRoute';
 
+// 路由拦截组件
+function RouteInterceptor() {
+  // 检查是否有token和登录状态
+  const token = sessionStorage.getItem('token');
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+  
+  // 如果有token或者已登录状态为true，说明已经登录了，直接跳转/home，否则跳转登录页面
+  const hasValidAuth = token || isLoggedIn;
+  
+  return hasValidAuth ? <Navigate to="/home" replace /> : <Navigate to="/login" replace />;
+}
+
 function App() {
   return (
     <Router>
       <Routes>
-        {/* 默认路由重定向到登录页 */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* 默认路由 - 路由拦截判断 */}
+        <Route path="/" element={<RouteInterceptor />} />
         
         {/* 登录页面 */}
         <Route path="/login" element={<Login />} />
@@ -34,8 +46,8 @@ function App() {
           } 
         />
         
-        {/* 404页面 - 重定向到登录页 */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* 404页面 - 使用路由拦截逻辑 */}
+        <Route path="*" element={<RouteInterceptor />} />
       </Routes>
     </Router>
   );

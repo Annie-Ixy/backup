@@ -33,7 +33,8 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
     onDrop,
     accept: {
       'application/zip': ['.zip'],
-      'application/x-zip-compressed': ['.zip']
+      'application/x-zip-compressed': ['.zip'],
+      'application/pdf': ['.pdf']
     },
     maxFiles: 1,
     maxSize: 100 * 1024 * 1024, // 100MB
@@ -81,7 +82,7 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
           AI驱动的简历筛选系统
         </h1>
         <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-          输入职位描述并上传包含候选人简历的ZIP文件，我们的AI系统将自动分析、评估并排名所有候选人
+          输入职位描述并上传候选人简历（PDF文件或包含多个PDF的ZIP文件），我们的AI系统将自动分析、评估并排名所有候选人
         </p>
 
         {/* Features */}
@@ -256,21 +257,22 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
                 释放文件开始上传
               </p>
               <p className="text-primary-600">
-                将ZIP文件拖放到此处
+                将PDF或ZIP文件拖放到此处
               </p>
             </div>
           ) : (
             <div>
               <p className="text-lg font-semibold text-gray-800 mb-2">
-                上传简历文件包
+                上传简历文件
               </p>
               <p className="text-gray-600 mb-4">
-                将包含PDF简历的ZIP文件拖放到此处，或点击选择文件
+                上传单个PDF简历文件或包含多个PDF简历的ZIP文件
               </p>
               <div className="text-sm text-gray-500">
-                <p>• 支持格式：ZIP文件</p>
+                <p>• 支持格式：PDF文件 或 ZIP文件</p>
                 <p>• 文件大小：最大100MB</p>
-                <p>• 简历格式：PDF文件</p>
+                <p>• PDF：单个候选人简历</p>
+                <p>• ZIP：多个PDF简历的压缩包</p>
               </div>
             </div>
           )}
@@ -345,8 +347,8 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
           <div>
             <h4 className="font-medium mb-2">步骤二：上传简历文件</h4>
             <ul className="space-y-1 text-blue-700">
-              <li>• 将所有PDF简历放入一个文件夹</li>
-              <li>• 压缩成ZIP格式后上传</li>
+              <li>• 单个简历：直接上传PDF文件</li>
+              <li>• 多个简历：压缩成ZIP格式后上传</li>
               <li>• AI将根据职位要求进行智能匹配</li>
             </ul>
           </div>

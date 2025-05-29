@@ -4,9 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import FileUpload from '../components/FileUpload';
 import CandidateRanking from '../components/CandidateRanking';
 import LoadingScreen from '../components/LoadingScreen';
-import Header from '../components/Header';
 import { Award, Upload, Users, TrendingUp, Home, LogOut, User } from 'lucide-react';
-import axios from 'axios';
+import api from '../utils/request';
 
 function Resume() {
   const [currentView, setCurrentView] = useState('upload');
@@ -20,7 +19,6 @@ function Resume() {
   const navigate = useNavigate();
   const username = localStorage.getItem('username') || '用户';
 
-  console.log(jobDescription,' -----');
 
   // Poll for results when jobId is set
   useEffect(() => {
@@ -28,8 +26,8 @@ function Resume() {
 
     const pollResults = async () => {
       try {
-        const response = await axios.get(`/api/results/${jobId}`);
-        const data = response.data;
+        const response = await api.get(`/test/api/results/${jobId}`);
+        const data = response;
 
         if (data.status === 'completed') {
           setCandidates(data.candidates);
@@ -39,6 +37,7 @@ function Resume() {
           if (data.jobDescription) {
             setProcessedJobDescription(data.jobDescription);
           }
+          clearInterval(interval)
         } else if (data.status === 'processing') {
           setCandidates(data.candidates || []);
           setProgress(data.progress || 0);
@@ -70,17 +69,18 @@ function Resume() {
     setCurrentView('processing');
 
     const formData = new FormData();
-    formData.append('zipFile', file);
+    formData.append('file', file);
     formData.append('jobDescription', jobDescription);
 
     try {
-      const response = await axios.post('/api/upload', formData, {
+      const response = await api.post('/test/api/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
+      console.log(response,' -----');
 
-      setJobId(response.data.jobId);
+      setJobId(response.jobId);
     } catch (error) {
       console.error('Upload error:', error);
       setError(error.response?.data?.error || 'Failed to upload file');
@@ -100,8 +100,10 @@ function Resume() {
   };
 
   const handleLogout = () => {
+    // 清除所有本地存储的认证信息
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('username');
+    sessionStorage.removeItem('token');
     navigate('/login');
   };
 
@@ -220,7 +222,7 @@ function Resume() {
             <div className="flex items-center space-x-6 mt-4 md:mt-0 text-sm text-gray-500">
               <div className="flex items-center space-x-1">
                 <Upload className="h-4 w-4" />
-                <span>ZIP Upload</span>
+                <span>PDF/ZIP Upload</span>
               </div>
               <div className="flex items-center space-x-1">
                 <TrendingUp className="h-4 w-4" />

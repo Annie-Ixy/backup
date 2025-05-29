@@ -6,7 +6,9 @@
     "@headlessui/react": "^1.7.17",
     "autoprefixer": "^10.4.16",
     "axios": "^1.6.0",
+    "crypto-js": "^4.2.0",
     "framer-motion": "^10.16.5",
+    "http-proxy-middleware": "^3.0.5",
     "lucide-react": "^0.294.0",
     "postcss": "^8.4.32",
     "react": "^18.2.0",
@@ -17,7 +19,9 @@
     "tailwindcss": "^3.3.6"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "cross-env PORT=3000 react-scripts start",
+    "start:dev": "cross-env PORT=3001 react-scripts start",
+    "start:prod": "cross-env PORT=3002 react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -40,5 +44,7 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:5001"
+  "devDependencies": {
+    "cross-env": "^7.0.3"
+  }
 }

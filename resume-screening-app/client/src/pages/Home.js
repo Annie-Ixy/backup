@@ -8,8 +8,10 @@ function Home() {
   const username = localStorage.getItem('username') || '用户';
 
   const handleLogout = () => {
+    // 清除所有本地存储的认证信息
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('username');
+    sessionStorage.removeItem('token');
     navigate('/login');
   };
 
