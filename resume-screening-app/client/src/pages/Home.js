@@ -7,8 +7,8 @@ import {
   User, 
   Upload, 
   MessageSquare, 
-  Image, 
-  BarChart3, 
+  Image,
+  BarChart3,
   FileSearch,
   Brain,
   Zap

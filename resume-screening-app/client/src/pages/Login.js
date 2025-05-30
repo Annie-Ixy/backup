@@ -4,13 +4,25 @@ import { useNavigate } from 'react-router-dom';
 import { User, Lock, Loader2, Brain, Sparkles, Zap, Cpu } from 'lucide-react';
 import { api } from '../utils/request';
 import CryptoJS from 'crypto-js';
+import Toast from '../components/Toast';
 
 function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [toast, setToast] = useState({ isVisible: false, type: 'info', message: '' });
   const navigate = useNavigate();
+
+  // 显示 Toast 的辅助函数
+  const showToast = (type, message) => {
+    setToast({ isVisible: true, type, message });
+  };
+
+  // 隐藏 Toast 的函数
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, isVisible: false }));
+  };
 
   // 检查是否已经有token，如果有就直接跳转到home页面
   useEffect(() => {
@@ -67,13 +79,17 @@ function Login() {
         })
         if (res.code === 0) {
             sessionStorage.setItem('token', res.data.token);
-            navigate('/home');
+            showToast('success', 'Login successful, redirecting...');
+            // 延迟跳转，让用户看到成功提示
+            setTimeout(() => {
+              navigate('/home');
+            }, 1000);
         } else {
-            alert(res.msg);
+            showToast('error', res.msg || 'Login failed, please check your username and password');
         }
       } catch (error) {
         console.log(error);
-        alert('登录失败，请检查网络连接');
+        showToast('error', '登录失败，请检查网络连接');
       } finally {
         setIsLoading(false);
       }
@@ -82,6 +98,14 @@ function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center px-4 relative overflow-hidden">
+      {/* Toast 组件 */}
+      <Toast
+        type={toast.type}
+        message={toast.message}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
+
       {/* 背景装饰元素 */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
