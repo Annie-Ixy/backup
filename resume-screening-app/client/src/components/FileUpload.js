@@ -10,11 +10,13 @@ import {
   Users,
   TrendingUp,
   FileArchive,
-  Briefcase
+  Briefcase,
+  X,
+  Plus
 } from 'lucide-react';
 
 const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange }) => {
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
 
   const onDrop = useCallback((acceptedFiles, rejectedFiles) => {
@@ -24,8 +26,21 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
     }
 
     if (acceptedFiles.length > 0) {
-      const file = acceptedFiles[0];
-      setSelectedFile(file);
+      // 如果是ZIP文件，只允许一个
+      const zipFiles = acceptedFiles.filter(file => file.type === 'application/zip' || file.type === 'application/x-zip-compressed');
+      const pdfFiles = acceptedFiles.filter(file => file.type === 'application/pdf');
+      
+      if (zipFiles.length > 0) {
+        // 如果有ZIP文件，只保留第一个ZIP文件
+        setSelectedFiles([zipFiles[0]]);
+      } else if (pdfFiles.length > 0) {
+        // 添加PDF文件到现有列表，避免重复
+        setSelectedFiles(prevFiles => {
+          const existingNames = prevFiles.map(f => f.name);
+          const newFiles = pdfFiles.filter(file => !existingNames.includes(file.name));
+          return [...prevFiles, ...newFiles];
+        });
+      }
     }
   }, []);
 
@@ -36,16 +51,22 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
       'application/x-zip-compressed': ['.zip'],
       'application/pdf': ['.pdf']
     },
-    maxFiles: 1,
+    multiple: true, // 允许多个文件
     maxSize: 100 * 1024 * 1024, // 100MB
   });
 
   const handleUpload = async () => {
-    if (!selectedFile || !jobDescription.trim()) return;
+    if (selectedFiles.length === 0 || !jobDescription.trim()) return;
     
     setUploading(true);
     try {
-      await onUpload(selectedFile, jobDescription);
+      // 如果只有一个文件，直接上传
+      if (selectedFiles.length === 1) {
+        await onUpload(selectedFiles[0], jobDescription);
+      } else {
+        // 如果有多个PDF文件，需要发送多个文件
+        await onUpload(selectedFiles, jobDescription);
+      }
     } catch (error) {
       console.error('Upload failed:', error);
     } finally {
@@ -53,7 +74,11 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
     }
   };
 
-  const canUpload = selectedFile && jobDescription && jobDescription.trim();
+  const removeFile = (index) => {
+    setSelectedFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
+  };
+
+  const canUpload = selectedFiles.length > 0 && jobDescription && jobDescription.trim();
 
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
@@ -62,6 +87,14 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
+
+  const getTotalSize = () => {
+    return selectedFiles.reduce((total, file) => total + file.size, 0);
+  };
+
+  const hasZipFile = selectedFiles.some(file => 
+    file.type === 'application/zip' || file.type === 'application/x-zip-compressed'
+  );
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -217,7 +250,7 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
           className={`text-center p-8 cursor-pointer rounded-lg transition-all duration-200 ${
             isDragActive
               ? 'bg-primary-50 border-primary-300'
-              : selectedFile
+              : selectedFiles.length > 0
               ? 'bg-green-50 border-green-300'
               : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
           }`}
@@ -225,7 +258,7 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
           <input {...getInputProps()} />
           
           <div className="mb-4">
-            {selectedFile ? (
+            {selectedFiles.length > 0 ? (
               <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full">
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
@@ -240,16 +273,17 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
             )}
           </div>
 
-          {selectedFile ? (
+          {selectedFiles.length > 0 ? (
             <div>
               <p className="text-lg font-semibold text-green-800 mb-2">
-                文件已选择
+                已选择 {selectedFiles.length} 个文件
               </p>
-              <div className="inline-flex items-center space-x-2 text-green-600 mb-4">
-                <FileText className="w-4 h-4" />
-                <span className="font-medium">{selectedFile.name}</span>
-                <span className="text-sm">({formatFileSize(selectedFile.size)})</span>
-              </div>
+              <p className="text-green-600 mb-4">
+                总大小: {formatFileSize(getTotalSize())}
+              </p>
+              <p className="text-sm text-green-600">
+                点击或拖拽添加更多PDF文件
+              </p>
             </div>
           ) : isDragActive ? (
             <div>
@@ -257,7 +291,7 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
                 释放文件开始上传
               </p>
               <p className="text-primary-600">
-                将PDF或ZIP文件拖放到此处
+                将PDF文件或ZIP文件拖放到此处
               </p>
             </div>
           ) : (
@@ -266,20 +300,76 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
                 上传简历文件
               </p>
               <p className="text-gray-600 mb-4">
-                上传单个PDF简历文件或包含多个PDF简历的ZIP文件
+                选择多个PDF简历文件或上传包含多个PDF简历的ZIP文件
               </p>
               <div className="text-sm text-gray-500">
                 <p>• 支持格式：PDF文件 或 ZIP文件</p>
-                <p>• 文件大小：最大100MB</p>
-                <p>• PDF：单个候选人简历</p>
-                <p>• ZIP：多个PDF简历的压缩包</p>
+                <p>• 文件大小：每个文件最大100MB</p>
+                <p>• PDF：可选择多个PDF简历文件</p>
+                <p>• ZIP：包含多个PDF简历的压缩包</p>
               </div>
             </div>
           )}
         </div>
 
+        {/* Selected Files List */}
+        {selectedFiles.length > 0 && (
+          <motion.div
+            className="mt-6"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">已选择的文件</h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {selectedFiles.map((file, index) => (
+                <div
+                  key={`${file.name}-${index}`}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0">
+                      {file.type === 'application/zip' || file.type === 'application/x-zip-compressed' ? (
+                        <FileArchive className="w-5 h-5 text-blue-600" />
+                      ) : (
+                        <FileText className="w-5 h-5 text-red-600" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {file.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {formatFileSize(file.size)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFile(index);
+                    }}
+                    disabled={uploading}
+                    className="flex-shrink-0 p-1 text-gray-400 hover:text-red-600 transition-colors duration-200"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            
+            {hasZipFile && selectedFiles.length > 1 && (
+              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ 检测到ZIP文件和其他文件，系统将只处理ZIP文件中的内容
+                </p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
         {/* Upload Button */}
-        {selectedFile && (
+        {selectedFiles.length > 0 && (
           <motion.div
             className="mt-6 text-center"
             initial={{ opacity: 0, y: 10 }}
@@ -308,17 +398,17 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
               ) : (
                 <>
                   <Upload className="w-4 h-4" />
-                  <span>开始分析简历</span>
+                  <span>开始分析简历 ({selectedFiles.length} 个文件)</span>
                 </>
               )}
             </button>
             
             <button
-              onClick={() => setSelectedFile(null)}
+              onClick={() => setSelectedFiles([])}
               disabled={uploading}
               className="ml-4 px-4 py-3 text-gray-600 hover:text-gray-800 transition-colors duration-200"
             >
-              重新选择
+              清空选择
             </button>
           </motion.div>
         )}
@@ -347,8 +437,9 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
           <div>
             <h4 className="font-medium mb-2">步骤二：上传简历文件</h4>
             <ul className="space-y-1 text-blue-700">
-              <li>• 单个简历：直接上传PDF文件</li>
-              <li>• 多个简历：压缩成ZIP格式后上传</li>
+              <li>• 多个简历：选择多个PDF文件</li>
+              <li>• 批量上传：压缩成ZIP格式后上传</li>
+              <li>• 支持拖拽：直接拖拽文件到上传区域</li>
               <li>• AI将根据职位要求进行智能匹配</li>
             </ul>
           </div>

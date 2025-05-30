@@ -14,15 +14,30 @@ import {
   Filter,
   Search,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  FileText
 } from 'lucide-react';
-
+import api from '../utils/request';
 const CandidateRanking = ({ candidates, jobDescription, onStartOver }) => {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTier, setFilterTier] = useState('all');
   const [expandedStrengths, setExpandedStrengths] = useState(new Set());
   const [expandedSkills, setExpandedSkills] = useState(new Set());
+
+  // Get jobId from the first candidate (all candidates in a ranking should have the same jobId)
+  const jobId = candidates.length > 0 ? candidates[0].jobId : null;
+
+  // Handle PDF viewing
+  const handleViewPdf = (candidate) => {
+    if (!candidate.hasPdf || !jobId) {
+      alert('PDF文件不可用');
+      return;
+    }
+    
+    const pdfUrl = `/test/api/pdf/${jobId}/${candidate.id}`;
+    window.open(pdfUrl, '_blank');
+  };
 
   // Toggle expanded state for strengths and skills
   const toggleStrengthsExpanded = (candidateId) => {
@@ -249,13 +264,27 @@ const CandidateRanking = ({ candidates, jobDescription, onStartOver }) => {
                         <p className="text-sm text-gray-500">{candidate.company}</p>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-2">
                       <div className={`text-3xl font-bold ${getScoreColor(candidate.score)}`}>
                         {candidate.score}
                       </div>
                       <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${getTierColor(candidate.tier)}`}>
                         {candidate.tier}
                       </div>
+                      {/* View PDF Button */}
+                      {/* {candidate.hasPdf && jobId && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewPdf(candidate);
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200"
+                          title="查看简历PDF"
+                        >
+                          <FileText size={12} />
+                          <span>查看完整简历</span>
+                        </button>
+                      )} */}
                     </div>
                   </div>
 
@@ -360,9 +389,22 @@ const CandidateRanking = ({ candidates, jobDescription, onStartOver }) => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="flex items-center gap-3 mb-4">
-                    <User className="text-primary-600" />
-                    <h2 className="text-xl font-semibold">{selectedCandidate.name}</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <User className="text-primary-600" />
+                      <h2 className="text-xl font-semibold">{selectedCandidate.name}</h2>
+                    </div>
+                    {/* View PDF Button in Detail Panel */}
+                    {selectedCandidate.hasPdf && jobId && (
+                      <button
+                        onClick={() => handleViewPdf(selectedCandidate)}
+                        className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200"
+                        title="查看简历PDF"
+                      >
+                        <FileText size={16} />
+                        <span>查看简历</span>
+                      </button>
+                    )}
                   </div>
                   
                   <div className="space-y-4">

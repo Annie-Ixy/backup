@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import FileUpload from '../components/FileUpload';
 import CandidateRanking from '../components/CandidateRanking';
 import LoadingScreen from '../components/LoadingScreen';
-import { Award, Upload, Users, TrendingUp, Home, LogOut, User } from 'lucide-react';
+import { Award, Upload, Users, TrendingUp, LogOut, User } from 'lucide-react';
 import api from '../utils/request';
+import { isLogin } from '../utils/index.ts';
 
 function Resume() {
   const [currentView, setCurrentView] = useState('upload');
@@ -18,10 +19,19 @@ function Resume() {
   const [processedJobDescription, setProcessedJobDescription] = useState('');
   const navigate = useNavigate();
   const username = localStorage.getItem('username') || '用户';
-
+  let isLoginIndex = 0;
 
   // Poll for results when jobId is set
   useEffect(() => {
+    if (isLoginIndex === 0) {
+      isLogin().then(res => {
+        isLoginIndex++;
+      if (!res) {
+        sessionStorage.removeItem('token');
+        navigate('/login');
+      }
+    })
+    }
     if (!jobId) return;
 
     const pollResults = async () => {
@@ -62,14 +72,27 @@ function Resume() {
     return () => clearInterval(interval);
   }, [jobId]);
 
-  const handleFileUpload = async (file, jobDescription) => {
+  const handleFileUpload = async (filesOrFile, jobDescription) => {
     setLoading(true);
     setError(null);
     setProgress(0);
     setCurrentView('processing');
 
     const formData = new FormData();
-    formData.append('file', file);
+    
+    // 处理单个文件或多个文件
+    if (Array.isArray(filesOrFile)) {
+      // 多个文件
+      filesOrFile.forEach((file, index) => {
+        formData.append('files', file);
+      });
+      console.log(`Uploading ${filesOrFile.length} files`);
+    } else {
+      // 单个文件 - 为了兼容性，也使用 files 字段
+      formData.append('files', filesOrFile);
+      console.log(`Uploading single file: ${filesOrFile.name}`);
+    }
+    
     formData.append('jobDescription', jobDescription);
 
     try {
@@ -83,7 +106,7 @@ function Resume() {
       setJobId(response.jobId);
     } catch (error) {
       console.error('Upload error:', error);
-      setError(error.response?.data?.error || 'Failed to upload file');
+      setError(error.response?.data?.error || 'Failed to upload files');
       setLoading(false);
       setCurrentView('upload');
     }
@@ -167,31 +190,29 @@ function Resume() {
     }
   };
 
+  const handleGoToHome = () => {
+    navigate('/home');
+  } 
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Custom Header for Resume Page */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-16 to-home" 
+            style={{cursor: 'pointer'}}
+            onClick={handleGoToHome}>
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Award className="h-5 w-5 text-white" />
               </div>
-              <h1 className="text-xl font-bold text-gray-900">AI简历筛选系统</h1>
+              <h1 className="text-xl font-bold text-gray-900">AI智能工具平台</h1>
             </div>
-            
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2 text-gray-700">
                 <User className="h-5 w-5" />
                 <span>{username}</span>
               </div>
-              <button
-                onClick={handleGoHome}
-                className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <Home className="h-4 w-4" />
-                <span>首页</span>
-              </button>
               <button
                 onClick={handleLogout}
                 className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
