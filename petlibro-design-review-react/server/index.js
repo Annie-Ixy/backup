@@ -9,27 +9,20 @@ const aiReviewer = require('./utils/aiReviewer');
 const reportGenerator = require('./utils/reportGenerator');
 
 const app = express();
-
+console.log('config-----', config);
 // Middleware
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Allow any localhost origin
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      return callback(null, true);
-    }
-    
-    // For production, you should specify exact origins
-    callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
+app.use(cors());
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, Origin, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  next();
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -72,11 +65,12 @@ const upload = multer({
 });
 
 // Routes
-app.get('http://localhost:5000/api/health', (req, res) => {
+app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
 });
 
-app.get('http://localhost:5000/api/config', (req, res) => {
+app.get('/api/config', (req, res) => {
+  console.log('config', config);
   res.json({
     supportedLanguages: config.SUPPORTED_LANGUAGES,
     reviewCategories: config.REVIEW_CATEGORIES,

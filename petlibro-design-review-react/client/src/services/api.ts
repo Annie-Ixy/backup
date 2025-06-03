@@ -69,7 +69,7 @@ export interface ReviewSummary {
 export const apiService = {
   // Get server configuration
   getConfig: async (): Promise<Config> => {
-    const response = await api.get('http://localhost:5000/api/config');
+    const response = await api.get('/api/config');
     return response.data;
   },
 
@@ -80,7 +80,7 @@ export const apiService = {
       formData.append('files', file);
     });
 
-    const response = await api.post('/upload', formData, {
+    const response = await api.post('/api/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -94,7 +94,7 @@ export const apiService = {
     language: string,
     reviewCategories: string[]
   ): Promise<ProcessResult[]> => {
-    const response = await api.post('/process', {
+    const response = await api.post('/api/process', {
       fileIds,
       language,
       reviewCategories,
@@ -109,7 +109,7 @@ export const apiService = {
     processedData: any,
     format: string
   ): Promise<{ reportFiles: Record<string, string> }> => {
-    const response = await api.post('/generate-report', {
+    const response = await api.post('/api/generate-report', {
       fileId,
       reviewResult,
       processedData,
@@ -120,6 +120,6 @@ export const apiService = {
 
   // Download report
   downloadReport: (filename: string): string => {
-    return `${API_BASE_URL}/download/${filename}`;
+    return `${API_BASE_URL}/api/download/${filename}`;
   },
 }; 
