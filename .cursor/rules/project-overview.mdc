@@ -1,0 +1,42 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# 简历智能筛选系统 - 项目概览
+
+## 项目简介
+这是一个AI驱动的简历筛选和候选人排名系统，专为HRBP部门设计。系统能够自动分析PDF简历并生成智能排名，帮助HR快速筛选合适的候选人。
+
+## 技术架构
+- **前端**: React 18 + Tailwind CSS + Framer Motion
+- **后端**: Node.js + Express + OpenAI GPT-4
+- **文件处理**: PDF-Parse + Yauzl (ZIP处理)
+
+## 核心功能
+1. **智能简历解析**: 从PDF文件中提取关键信息
+2. **AI驱动分析**: 使用GPT-4分析候选人技能和匹配度
+3. **智能评分排名**: 基于岗位要求生成综合评分
+4. **交互式界面**: 现代化UI支持搜索、筛选和详细查看
+5. **结果导出**: 支持CSV格式导出
+
+## 项目结构
+```
+resume-screening-app/
+├── client/          # React前端应用
+├── server/          # Node.js后端API
+├── package.json     # 根目录依赖配置
+└── README.md        # 项目文档
+```
+
+## 主要入口文件
+- 后端入口: [server/index.js](mdc:server/index.js)
+- 前端入口: [client/src/App.js](mdc:client/src/App.js)
+- 项目配置: [package.json](mdc:package.json)
+- 项目文档: [README.md](mdc:README.md)
+
+## 开发启动
+```bash
+npm run dev  # 同时启动前后端
+```
+
