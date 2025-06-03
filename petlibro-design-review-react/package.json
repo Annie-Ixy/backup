@@ -1,0 +1,20 @@
+{
+  "name": "petlibro-design-review-react",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm start",
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Petlibro Design Review AI - React version",
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  }
+}

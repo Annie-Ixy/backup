@@ -17,6 +17,9 @@ function Resume() {
   const [error, setError] = useState(null);
   const [jobDescription, setJobDescription] = useState('');
   const [processedJobDescription, setProcessedJobDescription] = useState('');
+  const [duplicateInfo, setDuplicateInfo] = useState([]);
+  const [originalCount, setOriginalCount] = useState(0);
+  const [removedCount, setRemovedCount] = useState(0);
   const navigate = useNavigate();
   const username = localStorage.getItem('username') || '用户';
   let isLoginIndex = 0;
@@ -46,6 +49,16 @@ function Resume() {
           setProgress(100);
           if (data.jobDescription) {
             setProcessedJobDescription(data.jobDescription);
+          }
+          // 处理重复检测信息
+          if (data.duplicateInfo) {
+            setDuplicateInfo(data.duplicateInfo);
+          }
+          if (data.originalCount) {
+            setOriginalCount(data.originalCount);
+          }
+          if (data.removedCount) {
+            setRemovedCount(data.removedCount);
           }
           clearInterval(interval)
         } else if (data.status === 'processing') {
@@ -119,7 +132,11 @@ function Resume() {
     setLoading(false);
     setProgress(0);
     setError(null);
+    setJobDescription('');
     setProcessedJobDescription('');
+    setDuplicateInfo([]);
+    setOriginalCount(0);
+    setRemovedCount(0);
   };
 
   const handleLogout = () => {
@@ -181,6 +198,9 @@ function Resume() {
               candidates={candidates} 
               jobDescription={processedJobDescription}
               onStartOver={handleStartOver}
+              duplicateInfo={duplicateInfo}
+              originalCount={originalCount}
+              removedCount={removedCount}
             />
           </motion.div>
         );

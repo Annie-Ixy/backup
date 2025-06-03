@@ -18,12 +18,13 @@ import {
   FileText
 } from 'lucide-react';
 import api from '../utils/request';
-const CandidateRanking = ({ candidates, jobDescription, onStartOver }) => {
+const CandidateRanking = ({ candidates, jobDescription, onStartOver, duplicateInfo, originalCount, removedCount }) => {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTier, setFilterTier] = useState('all');
   const [expandedStrengths, setExpandedStrengths] = useState(new Set());
   const [expandedSkills, setExpandedSkills] = useState(new Set());
+  const [showDuplicateInfo, setShowDuplicateInfo] = useState(false);
 
   // Get jobId from the first candidate (all candidates in a ranking should have the same jobId)
   const jobId = candidates.length > 0 ? candidates[0].jobId : null;
@@ -164,7 +165,55 @@ const CandidateRanking = ({ candidates, jobDescription, onStartOver }) => {
             <p className="text-gray-600">
               共分析了 <span className="font-semibold text-primary-600">{candidates.length}</span> 位候选人，
               以下是基于AI分析的排名结果
+              {removedCount > 0 && (
+                <span className="ml-2 text-sm text-orange-600">
+                  (已自动去除 {removedCount} 份重复简历)
+                </span>
+              )}
             </p>
+            
+            {/* 重复检测信息 */}
+            {duplicateInfo && duplicateInfo.length > 0 && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowDuplicateInfo(!showDuplicateInfo)}
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  查看重复简历处理详情
+                  {showDuplicateInfo ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+                
+                {showDuplicateInfo && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-3 p-4 bg-blue-50 rounded-lg border border-blue-200"
+                  >
+                    <h4 className="font-medium text-blue-900 mb-3">重复简历处理详情</h4>
+                    <div className="space-y-3">
+                      {duplicateInfo.map((group, index) => (
+                        <div key={index} className="text-sm">
+                          <div className="font-medium text-blue-800">
+                            重复组 {group.groupId}: 保留 {group.keptCandidate.name} ({group.keptCandidate.score}分)
+                          </div>
+                          <div className="text-blue-700 ml-4">
+                            移除: {group.removedCandidates.map(c => `${c.name} (${c.score}分)`).join(', ')}
+                          </div>
+                          <div className="text-blue-600 ml-4 text-xs">
+                            原因: {group.reason}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-blue-200 text-sm text-blue-700">
+                      <strong>统计:</strong> 原始简历 {originalCount} 份 → 去重后 {candidates.length} 份 → 移除重复 {removedCount} 份
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            )}
           </div>
           
           <div className="flex items-center space-x-3 mt-4 lg:mt-0">
@@ -259,9 +308,22 @@ const CandidateRanking = ({ candidates, jobDescription, onStartOver }) => {
                         {candidate.rank}
                       </div>
                       <div>
-                        <h3 className="text-xl font-semibold text-gray-900">{candidate.name}</h3>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-xl font-semibold text-gray-900">{candidate.name}</h3>
+                          {candidate.isDeduplicated && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium border border-orange-200">
+                              <FileText size={12} />
+                              已去重
+                            </span>
+                          )}
+                        </div>
                         <p className="text-gray-600">{candidate.position}</p>
                         <p className="text-sm text-gray-500">{candidate.company}</p>
+                        {candidate.duplicateInfo && (
+                          <p className="text-xs text-orange-600 mt-1">
+                            {candidate.duplicateInfo}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
