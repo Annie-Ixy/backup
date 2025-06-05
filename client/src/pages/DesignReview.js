@@ -30,6 +30,8 @@ function DesignReview() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [processResults, setProcessResults] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [currentProcessingFile, setCurrentProcessingFile] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -54,7 +56,8 @@ function DesignReview() {
   const handleFilesSelected = async (files) => {
     try {
       const uploadedFileData = await designReviewApiService.uploadFiles(files);
-      setUploadedFiles(uploadedFileData);
+      // 追加新文件到现有文件列表，而不是替换
+      setUploadedFiles(prevFiles => [...prevFiles, ...uploadedFileData]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
     }
@@ -63,18 +66,53 @@ function DesignReview() {
   const handleProcess = async () => {
     if (uploadedFiles.length === 0) return;
 
+    // 获取未处理的文件
+    const processedFileIds = processResults.map(result => result.fileId);
+    const unprocessedFiles = uploadedFiles.filter(file => !processedFileIds.includes(file.id));
+    
+    if (unprocessedFiles.length === 0) return;
+
     setIsProcessing(true);
+    setProcessingProgress(0);
+    setCurrentProcessingFile('');
     setError(null);
 
     try {
-      const fileIds = uploadedFiles.map(file => file.id);
-      const results = await designReviewApiService.processFiles(fileIds, selectedLanguage, selectedCategories);
-      setProcessResults(results);
+      const newResults = [];
+      
+      for (let i = 0; i < unprocessedFiles.length; i++) {
+        const file = unprocessedFiles[i];
+        setCurrentProcessingFile(file.originalName);
+        setProcessingProgress(Math.round((i / unprocessedFiles.length) * 100));
+
+        try {
+          // 处理单个文件
+          const results = await designReviewApiService.processFiles([file.id], selectedLanguage, selectedCategories);
+          newResults.push(...results);
+        } catch (fileError) {
+          console.error(`Error processing file ${file.originalName}:`, fileError);
+          // 添加失败结果
+          newResults.push({
+            fileId: file.id,
+            success: false,
+            error: fileError.message || 'Processing failed'
+          });
+        }
+      }
+
+      // 完成处理
+      setProcessingProgress(100);
+      setCurrentProcessingFile('');
+      
+      // 将新结果添加到现有结果中
+      setProcessResults(prevResults => [...prevResults, ...newResults]);
       setActiveTab('review');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Processing failed');
     } finally {
       setIsProcessing(false);
+      setProcessingProgress(0);
+      setCurrentProcessingFile('');
     }
   };
 
@@ -85,6 +123,29 @@ function DesignReview() {
       case 'low': return 'text-blue-600 bg-blue-50';
       default: return 'text-gray-600 bg-gray-50';
     }
+  };
+
+  // 检查是否有未处理的文件
+  const hasUnprocessedFiles = () => {
+    if (uploadedFiles.length === 0) return false;
+    if (processResults.length === 0) return true; // 没有任何处理结果，说明都是新文件
+    
+    // 检查是否有新上传的文件（在processResults中找不到对应的结果）
+    const processedFileIds = processResults.map(result => result.fileId);
+    return uploadedFiles.some(file => !processedFileIds.includes(file.id));
+  };
+
+  // 用于强制重新渲染文件上传组件的key
+  const [uploadComponentKey, setUploadComponentKey] = useState(0);
+
+  // 清空所有文件和结果
+  const handleClearAll = () => {
+    setUploadedFiles([]);
+    setProcessResults([]);
+    setError(null);
+    setProcessingProgress(0);
+    setCurrentProcessingFile('');
+    setUploadComponentKey(prev => prev + 1); // 强制重新渲染上传组件
   };
 
   const handleExport = async (format) => {
@@ -321,32 +382,100 @@ function DesignReview() {
 
                       {config && (
                         <DesignFileUpload
+                          key={uploadComponentKey}
                           onFilesSelected={handleFilesSelected}
                           acceptedFileTypes={config.supportedFileTypes}
                         />
                       )}
 
                       {uploadedFiles.length > 0 && (
-                        <motion.button
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          onClick={handleProcess}
-                          disabled={isProcessing}
-                          className="mt-6 w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-6 bg-gray-50 rounded-lg p-4"
                         >
-                          {isProcessing ? (
-                            <>
-                              <Loader2 className="w-5 h-5 animate-spin" />
-                              处理中...
-                            </>
-                          ) : (
-                            <>
-                              开始处理
-                              <ChevronRight className="w-5 h-5" />
-                            </>
-                          )}
-                        </motion.button>
+                          <h3 className="text-sm font-medium text-gray-700 mb-3">
+                            已上传的文件 ({uploadedFiles.length})
+                          </h3>
+                          <div className="space-y-2">
+                            {uploadedFiles.map((file, index) => {
+                              const isProcessed = processResults.some(result => result.fileId === file.id);
+                              return (
+                                <div key={file.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                                  <div className="flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm text-gray-700">{file.originalName}</span>
+                                    <span className="text-xs text-gray-500">
+                                      ({(file.size / 1024).toFixed(1)} KB)
+                                    </span>
+                                    {isProcessed && (
+                                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">
+                                        已处理
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      setUploadedFiles(prev => prev.filter(f => f.id !== file.id));
+                                      // 同时删除对应的处理结果
+                                      setProcessResults(prev => prev.filter(result => result.fileId !== file.id));
+                                    }}
+                                    className="text-red-500 hover:text-red-700 text-xs"
+                                  >
+                                    删除
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
                       )}
+
+                                             {uploadedFiles.length > 0 && hasUnprocessedFiles() && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="mt-6"
+                          >
+                            {isProcessing ? (
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between text-sm text-gray-600">
+                                  <span>处理进度</span>
+                                  <span>{processingProgress}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${processingProgress}%` }}
+                                  ></div>
+                                </div>
+                                {currentProcessingFile && (
+                                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span>正在处理: {currentProcessingFile}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={handleProcess}
+                                className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                              >
+                                开始处理
+                                <ChevronRight className="w-5 h-5" />
+                              </button>
+                            )}
+                          </motion.div>
+                        )}
+
+                        {uploadedFiles.length > 0 && (
+                          <button
+                            onClick={handleClearAll}
+                            className="mt-3 w-full text-gray-500 hover:text-gray-700 text-sm transition-colors"
+                          >
+                            清空所有文件
+                          </button>
+                        )}
                     </motion.div>
                   )}
 
