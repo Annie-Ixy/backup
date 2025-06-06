@@ -119,14 +119,21 @@ function DesignReview() {
               format
             });
             
-            const downloadUrl = designReviewApiService.downloadReport(downloadFileName);
-            
+            // const downloadUrl = designReviewApiService.downloadReport(downloadFileName);
+            const host = window.location.origin.includes('localhost') ? 'http://localhost:9000' : window.location.origin+'/test';
+            let href = host +'/api/'+ reportData.reportFiles.excel;
+            // 修复路径替换，支持多种路径格式
+            href = href.replace(/\/api\/outputs\//g, '/api/design-review/download/');
+            href = href.replace(/\\api\\outputs\\/g, '/api/design-review/download/');
+            href = href.replace(/outputs\//g, 'design-review/download/');
+            console.log('Download URL:', href);
             // 创建下载链接
             const a = document.createElement('a');
             a.style.display = 'none';
-            a.href = downloadUrl;
+            a.href = href;
             a.download = downloadFileName;
             document.body.appendChild(a);
+
             a.click();
             document.body.removeChild(a);
           }
