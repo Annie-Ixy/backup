@@ -12,7 +12,8 @@ import {
   FileSearch,
   Brain,
   Zap,
-  Palette
+  Palette,
+  TrendingUp
 } from 'lucide-react';
 import { isLogin } from '../utils/index.ts';
 
@@ -76,6 +77,16 @@ function Home() {
       available: true
     },
     {
+      id: 'competitor-analysis',
+      title: '竞品分析',
+      description: '智能分析竞争对手产品特性、市场策略和用户反馈，生成专业竞品分析报告',
+      icon: TrendingUp,
+      color: 'bg-green-600',
+      hoverColor: 'hover:bg-green-700',
+      action: () => navigate('/competitor-analysis'),
+      available: false
+    },
+    {
       id: 'chat',
       title: 'AI对话助手',
       description: '智能聊天机器人，帮助您解答问题和提供专业建议',
@@ -103,16 +114,6 @@ function Home() {
       color: 'bg-orange-600',
       hoverColor: 'hover:bg-orange-700',
       action: () => navigate('/analytics'),
-      available: false
-    },
-    {
-      id: 'document',
-      title: '文档解析',
-      description: '智能解析各类文档，提取关键信息和结构化数据',
-      icon: FileSearch,
-      color: 'bg-indigo-600',
-      hoverColor: 'hover:bg-indigo-700',
-      action: () => navigate('/document'),
       available: false
     }
   ];
