@@ -324,6 +324,12 @@ Focus on:
 6. Layout and design quality
 7. Image quality and relevance
 
+CRITICAL REQUIREMENT FOR LOCATION FIELD:
+- Always specify the exact page number and detailed area description
+- Format: "第X页，[具体区域描述]" (for Chinese) or "Page X, [specific area]" (for English)
+- Examples: "第1页，标题区域", "第2页，左侧产品介绍", "第3页，页脚联系方式"
+- Be as specific as possible about the location within each page
+
 ${languageInstructions[targetLanguage] || languageInstructions['en']}
 
 IMPORTANT: Return ONLY valid JSON without any additional text or markdown formatting. Your response must start with { and end with }.
@@ -334,7 +340,7 @@ Return your response in JSON format with the following structure:
     {
       "type": "spelling|grammar|consistency|terminology|brand|technical|formatting|visual",
       "severity": "high|medium|low",
-      "location": "page X, section/area description",
+      "location": "第X页，具体区域描述 (详细描述页面位置)",
       "original_text": "the problematic text or description",
       "suggested_fix": "corrected text or suggestion",
       "explanation": "why this is an issue",
@@ -397,7 +403,7 @@ Return your response in JSON format with the following structure:
         simulatedIssues.push({
           type: 'spelling',
           severity: 'low',
-          location: '第1页',
+          location: '第1页，文档标题区域',
           original_text: '示例文本',
           suggested_fix: '修正后的文本',
           explanation: '模拟发现的拼写问题',
@@ -409,7 +415,7 @@ Return your response in JSON format with the following structure:
       simulatedIssues.push({
         type: 'formatting',
         severity: 'medium',
-        location: '整体布局',
+        location: '第1页，整体布局格式',
         original_text: '格式不一致',
         suggested_fix: '统一格式标准',
         explanation: '建议保持格式一致性',
@@ -423,7 +429,7 @@ Return your response in JSON format with the following structure:
       simulatedIssues.push({
         type: 'brand',
         severity: 'high',
-        location: '品牌名称',
+        location: '第1页，页眉品牌标识区域',
         original_text: 'Petlibro',
         suggested_fix: 'Petlibro',
         explanation: '品牌名称使用正确',
@@ -435,7 +441,7 @@ Return your response in JSON format with the following structure:
         simulatedIssues.push({
           type: 'consistency',
           severity: 'medium',
-          location: '术语使用',
+          location: '第2页，产品描述段落',
           original_text: '术语不统一',
           suggested_fix: '统一术语标准',
           explanation: '建议在文档中保持术语一致性',
