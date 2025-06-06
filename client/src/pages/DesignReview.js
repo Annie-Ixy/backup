@@ -148,57 +148,65 @@ function DesignReview() {
     setUploadComponentKey(prev => prev + 1); // 强制重新渲染上传组件
   };
 
-  const handleExport = async (format) => {
-    if (processResults.length === 0) return;
+  const handleExport = async (format, fileId) => {
+    if (!fileId) return;
 
     setIsExporting(true);
     setError(null);
 
     try {
-      for (const result of processResults) {
-        if (!result.success) continue;
+      // 找到指定文件的处理结果
+      const targetResult = processResults.find(result => result.fileId === fileId && result.success);
+      
+      if (!targetResult) {
+        setError('找不到指定文件的处理结果');
+        return;
+      }
 
-        const reportData = await designReviewApiService.generateReport(
-          result.fileId,
-          result.reviewResult,
-          result.processedData,
-          format
-        );
+      const reportData = await designReviewApiService.generateReport(
+        targetResult.fileId,
+        targetResult.reviewResult,
+        targetResult.processedData,
+        format
+      );
+      
+      if (reportData.success && reportData.reportFiles) {
+        const fileName = format === 'excel' ? 
+          Object.keys(reportData.reportFiles).find(key => key.includes('excel')) :
+          Object.keys(reportData.reportFiles).find(key => key.includes('html'));
         
-        if (reportData.success && reportData.reportFiles) {
-          const fileName = format === 'excel' ? 
-            Object.keys(reportData.reportFiles).find(key => key.includes('excel')) :
-            Object.keys(reportData.reportFiles).find(key => key.includes('html'));
+        if (fileName && reportData.reportFiles[fileName]) {
+          const filePath = reportData.reportFiles[fileName];
+          const downloadFileName = filePath.split(/[/\\]/).pop() || `report.${format === 'excel' ? 'xlsx' : 'html'}`;
           
-          if (fileName && reportData.reportFiles[fileName]) {
-            const filePath = reportData.reportFiles[fileName];
-            const downloadFileName = filePath.split(/[/\\]/).pop() || `report.${format === 'excel' ? 'xlsx' : 'html'}`;
-            
-            console.log('Download info:', {
-              filePath,
-              downloadFileName,
-              format
-            });
-            
-            // const downloadUrl = designReviewApiService.downloadReport(downloadFileName);
-            const host = window.location.origin.includes('localhost') ? 'http://localhost:9000' : window.location.origin+'/test';
-            let href = host +'/api/'+ reportData.reportFiles.excel;
-            // 修复路径替换，支持多种路径格式
-            href = href.replace(/\/api\/outputs\//g, '/api/design-review/download/');
-            href = href.replace(/\\api\\outputs\\/g, '/api/design-review/download/');
-            href = href.replace(/outputs\//g, 'design-review/download/');
-            console.log('Download URL:', href);
-            // 创建下载链接
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = href;
-            a.download = downloadFileName;
-            document.body.appendChild(a);
+          console.log('Download info:', {
+            filePath,
+            downloadFileName,
+            format,
+            fileId
+          });
+          
+        // const downloadUrl = designReviewApiService.downloadReport(downloadFileName);
+        const host = window.location.origin.includes('localhost') ? 'http://localhost:9000' : window.location.origin+'/test';
+        let href = host +'/api/'+ reportData.reportFiles[fileName];
+        // 跨平台兼容的路径替换 - 处理 Windows 和 Mac/Linux 的路径差异
+        href = href.replace(/[\/\\]api[\/\\]outputs[\/\\]/g, '/api/design-review/download/');
+        href = href.replace(/outputs[\/\\]/g, 'design-review/download/');
+        // 最后确保路径分隔符统一为正斜杠（URL标准）
+        href = href.replace(/\\/g, '/');
+        console.log('Download URL:', href);
+        // 创建下载链接
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = href;
+        a.download = downloadFileName;
+        document.body.appendChild(a);
 
-            a.click();
-            document.body.removeChild(a);
-          }
+        a.click();
+        document.body.removeChild(a);
         }
+      } else {
+        setError('报告生成失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Export failed');
@@ -604,38 +612,55 @@ function DesignReview() {
                     >
                       <h2 className="text-xl font-semibold mb-4">报告导出</h2>
                       
-                      {processResults.length === 0 ? (
+                      {processResults.filter(r => r.success).length === 0 ? (
                         <div className="text-center py-12 text-gray-500">
                           <Download className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                           <p>请先上传并处理文件</p>
                         </div>
                       ) : (
-                        <div className="space-y-4">
-                          <p className="text-gray-600">选择要导出的报告格式：</p>
+                        <div className="space-y-6">
+                          <p className="text-gray-600">选择要导出报告的文件：</p>
                           
-                          <div className="grid grid-cols-2 gap-4">
-                            <button 
-                              onClick={() => handleExport('excel')}
-                              disabled={isExporting}
-                              className="p-4 border rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <FileText className="w-8 h-8 mx-auto mb-2 text-purple-600" />
-                              <h3 className="font-medium">Excel 报告</h3>
-                              <p className="text-sm text-gray-500 mt-1">详细的问题列表和统计</p>
-                              {isExporting && <Loader2 className="w-4 h-4 animate-spin mx-auto mt-2" />}
-                            </button>
-                            
-                            <button 
-                              onClick={() => handleExport('html')}
-                              disabled={isExporting}
-                              className="p-4 border rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <FileText className="w-8 h-8 mx-auto mb-2 text-purple-600" />
-                              <h3 className="font-medium">HTML 报告</h3>
-                              <p className="text-sm text-gray-500 mt-1">可视化的网页报告</p>
-                              {isExporting && <Loader2 className="w-4 h-4 animate-spin mx-auto mt-2" />}
-                            </button>
-                          </div>
+                          {processResults.filter(result => result.success).map((result, index) => {
+                            const fileName = uploadedFiles.find(f => f.id === result.fileId)?.originalName || 'Unknown File';
+                            return (
+                              <div key={result.fileId} className="border rounded-lg p-6">
+                                <div className="flex items-center justify-between mb-4">
+                                  <div className="flex items-center gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500" />
+                                    <h3 className="text-lg font-medium">{fileName}</h3>
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    总问题: {result.reviewResult?.review_summary?.total_issues || 0} 个
+                                  </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                  <button 
+                                    onClick={() => handleExport('excel', result.fileId)}
+                                    disabled={isExporting}
+                                    className="p-4 border rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <FileText className="w-8 h-8 mx-auto mb-2 text-purple-600" />
+                                    <h4 className="font-medium">导出 Excel</h4>
+                                    <p className="text-sm text-gray-500 mt-1">详细的问题列表和统计</p>
+                                    {isExporting && <Loader2 className="w-4 h-4 animate-spin mx-auto mt-2" />}
+                                  </button>
+                                  
+                                  <button 
+                                    onClick={() => handleExport('html', result.fileId)}
+                                    disabled={isExporting}
+                                    className="p-4 border rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <FileText className="w-8 h-8 mx-auto mb-2 text-purple-600" />
+                                    <h4 className="font-medium">导出 HTML</h4>
+                                    <p className="text-sm text-gray-500 mt-1">可视化的网页报告</p>
+                                    {isExporting && <Loader2 className="w-4 h-4 animate-spin mx-auto mt-2" />}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </motion.div>

@@ -1,5 +1,5 @@
 module.exports = {
-  port: process.env.PORT || 5000,
+  port: process.env.PORT || 9000,
   openai: {
     apiKey: process.env.OPENAI_API_KEY
   },
