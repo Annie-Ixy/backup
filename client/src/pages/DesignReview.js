@@ -183,10 +183,11 @@ function DesignReview() {
             // const downloadUrl = designReviewApiService.downloadReport(downloadFileName);
             const host = window.location.origin.includes('localhost') ? 'http://localhost:9000' : window.location.origin+'/test';
             let href = host +'/api/'+ reportData.reportFiles.excel;
-            // 修复路径替换，支持多种路径格式
-            href = href.replace(/\/api\/outputs\//g, '/api/design-review/download/');
-            href = href.replace(/\\api\\outputs\\/g, '/api/design-review/download/');
-            href = href.replace(/outputs\//g, 'design-review/download/');
+            // 跨平台兼容的路径替换 - 处理 Windows 和 Mac/Linux 的路径差异
+            href = href.replace(/[\/\\]api[\/\\]outputs[\/\\]/g, '/api/design-review/download/');
+            href = href.replace(/outputs[\/\\]/g, 'design-review/download/');
+            // 最后确保路径分隔符统一为正斜杠（URL标准）
+            href = href.replace(/\\/g, '/');
             console.log('Download URL:', href);
             // 创建下载链接
             const a = document.createElement('a');
