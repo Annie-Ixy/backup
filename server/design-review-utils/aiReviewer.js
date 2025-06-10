@@ -6,7 +6,7 @@ class AIReviewer {
     if (process.env.OPENAI_API_KEY) {
       this.openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
-        timeout: 5 * 60 * 1000  // 5分钟超时
+        timeout: 10 * 60 * 1000  // 5分钟超时
       });
     }
   }
@@ -283,9 +283,12 @@ Please identify all issues and provide specific corrections.`;
 
       const reviewResult = this.parseAIResponse(response.choices[0].message.content);
       
+      // Filter issues by confidence score to reduce false positives
+      const filteredIssues = this.filterIssuesByConfidence(reviewResult.issues || []);
+      
       return {
-        issues: reviewResult.issues || [],
-        review_summary: this.generateSummary(reviewResult.issues),
+        issues: filteredIssues,
+        review_summary: this.generateSummary(filteredIssues),
         recommendations: reviewResult.recommendations || [],
         overall_quality_score: reviewResult.overall_quality_score || 0,
         metadata: {
@@ -314,21 +317,33 @@ Please identify all issues and provide specific corrections.`;
     };
 
     return `You are a professional content reviewer with vision capabilities, specializing in product design documentation for Petlibro pet products. 
-Your task is to analyze PDF pages visually and review content for accuracy, consistency, and quality. 
+Your task is to analyze PDF pages visually and review content for accuracy, consistency, and quality.
+
+IMPORTANT GUIDELINES:
+1. Be conservative in error detection - only report CLEAR and OBVIOUS errors
+2. Consider that packaging design may use artistic fonts and intentional spacing for visual appeal
+3. Do not report issues unless you are highly confident (>80%) it's actually an error
+4. Distinguish between design choices and actual mistakes
+
 Focus on:
-1. Text content: spelling, grammar, punctuation errors
+1. Text content: obvious spelling, grammar errors (not minor typography variations)
 2. Terminology consistency across pages
 3. Brand name accuracy (Petlibro)
 4. Technical accuracy of product information
-5. Visual formatting consistency
-6. Layout and design quality
+5. Visual formatting consistency (major issues only)
+6. Layout and design quality (significant problems only)
 7. Image quality and relevance
 
-CRITICAL REQUIREMENT FOR LOCATION FIELD:
-- Always specify the exact page number and detailed area description
-- Format: "第X页，[具体区域描述]" (for Chinese) or "Page X, [specific area]" (for English)
-- Examples: "第1页，标题区域", "第2页，左侧产品介绍", "第3页，页脚联系方式"
-- Be as specific as possible about the location within each page
+ENHANCED LOCATION REQUIREMENTS:
+- Provide DETAILED location descriptions with multiple reference points
+- Format: "第X页，[区域] + [具体位置] + [周围文字引用]"
+- Examples: 
+  * "第1页，页面上部标题区域，'Petlibro'文字下方约2cm处"
+  * "第2页，左侧产品介绍栏，以'功能特点'开头的段落第3行"
+  * "第3页，页面中央表格，第2列第4行数据"
+- Always include surrounding text context for easier location
+- Use relative positioning (上部/中部/下部, 左侧/中央/右侧)
+- Provide distance estimates when possible
 
 ${languageInstructions[targetLanguage] || languageInstructions['en']}
 
@@ -340,17 +355,49 @@ Return your response in JSON format with the following structure:
     {
       "type": "spelling|grammar|consistency|terminology|brand|technical|formatting|visual",
       "severity": "high|medium|low",
-      "location": "第X页，具体区域描述 (详细描述页面位置)",
-      "original_text": "the problematic text or description",
+      "location": "第X页，[区域][位置][文字引用] - 详细描述页面具体位置",
+      "original_text": "完整的问题文字或描述",
       "suggested_fix": "corrected text or suggestion",
-      "explanation": "why this is an issue",
+      "explanation": "详细说明为什么这是问题，考虑设计意图",
       "confidence": 0.0-1.0,
-      "category": "basic|advanced"
+      "category": "basic|advanced",
+      "surrounding_context": "问题前后的完整文字内容，帮助定位"
     }
   ],
   "recommendations": ["general recommendations for improvement"],
   "overall_quality_score": 0-100
 }`;
+  }
+
+  filterIssuesByConfidence(issues) {
+    const CONFIDENCE_THRESHOLD = 0.75; // Only report issues with >75% confidence
+    const PACKAGING_KEYWORDS = ['空格', '标点', '字体', '间距', '排版']; // Packaging-specific terms
+    
+    return issues.filter(issue => {
+      // Always include high-confidence issues
+      if (issue.confidence >= CONFIDENCE_THRESHOLD) {
+        return true;
+      }
+      
+      // For packaging-related issues, be more strict
+      const isPackagingIssue = PACKAGING_KEYWORDS.some(keyword => 
+        issue.explanation?.includes(keyword) || 
+        issue.type?.includes('formatting') ||
+        issue.type?.includes('visual')
+      );
+      
+      if (isPackagingIssue && issue.confidence < 0.85) {
+        console.log(`Filtered out low-confidence packaging issue: ${issue.type} (confidence: ${issue.confidence})`);
+        return false;
+      }
+      
+      // For critical issues (brand, technical), lower the threshold
+      if (issue.type === 'brand' || issue.type === 'technical') {
+        return issue.confidence >= 0.6;
+      }
+      
+      return issue.confidence >= CONFIDENCE_THRESHOLD;
+    });
   }
 
   generateSummary(issues) {

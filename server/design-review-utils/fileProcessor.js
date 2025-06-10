@@ -127,10 +127,15 @@ class FileProcessor {
             const poppler = new Poppler();
             const outputFile = path.join(outputDir, path.basename(filePath, '.pdf'));
             
-            // Configure node-poppler options
+            // Configure node-poppler options for high-quality image conversion
             const options = {
               pngFile: true,
-              singleFile: false // Generate separate files for each page
+              singleFile: false, // Generate separate files for each page
+              resolutionXYAxis: 300, // High DPI for better text clarity
+              antialias: 'best', // Better text rendering
+              grayscale: false, // Keep color information
+              transparent: false, // Solid background for better text contrast
+              cropBox: true // Respect PDF crop boundaries
             };
             
             // Convert PDF to images using node-poppler

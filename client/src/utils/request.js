@@ -3,7 +3,7 @@ import axios from 'axios';
 // 创建axios实例
 const request = axios.create({
   baseURL: '',
-  timeout: 5 * 60 * 1000, // 请求超时时间
+  timeout: 10 * 60 * 1000, // 请求超时时间
   headers: {
     'Content-Type': 'application/json',
   },
