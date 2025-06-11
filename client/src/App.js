@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Resume from './pages/Resume';
+import DesignReview from './pages/DesignReview';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // 路由拦截组件
@@ -49,6 +50,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Resume />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/design-review" 
+          element={
+            <ProtectedRoute>
+              <DesignReview />
             </ProtectedRoute>
           } 
         />

@@ -11,7 +11,9 @@ import {
   BarChart3,
   FileSearch,
   Brain,
-  Zap
+  Zap,
+  Palette,
+  TrendingUp
 } from 'lucide-react';
 import { isLogin } from '../utils/index.ts';
 
@@ -44,6 +46,10 @@ function Home() {
     navigate('/resume');
   };
 
+  const handleGoToDesignReview = () => {
+    navigate('/design-review');
+  };
+
   const handleGoToHome = () => {
     navigate('/home');
   };
@@ -61,6 +67,26 @@ function Home() {
       available: true
     },
     {
+      id: 'design-review',
+      title: '设计稿审核',
+      description: '通过AI工具提高设计稿审核准确度和效率，自动检测设计问题',
+      icon: Palette,
+      color: 'bg-purple-600',
+      hoverColor: 'hover:bg-purple-700',
+      action: handleGoToDesignReview,
+      available: true
+    },
+    {
+      id: 'competitor-analysis',
+      title: '竞品分析',
+      description: '智能分析竞争对手产品特性、市场策略和用户反馈，生成专业竞品分析报告',
+      icon: TrendingUp,
+      color: 'bg-green-600',
+      hoverColor: 'hover:bg-green-700',
+      action: () => navigate('/competitor-analysis'),
+      available: false
+    },
+    {
       id: 'chat',
       title: 'AI对话助手',
       description: '智能聊天机器人，帮助您解答问题和提供专业建议',
@@ -75,8 +101,8 @@ function Home() {
       title: '图像分析',
       description: '上传图片进行AI分析，识别内容、提取文字和分析特征',
       icon: Image,
-      color: 'bg-purple-600',
-      hoverColor: 'hover:bg-purple-700',
+      color: 'bg-cyan-600',
+      hoverColor: 'hover:bg-cyan-700',
       action: () => navigate('/image'),
       available: false
     },
@@ -88,26 +114,6 @@ function Home() {
       color: 'bg-orange-600',
       hoverColor: 'hover:bg-orange-700',
       action: () => navigate('/analytics'),
-      available: false
-    },
-    {
-      id: 'document',
-      title: '文档解析',
-      description: '智能解析各类文档，提取关键信息和结构化数据',
-      icon: FileSearch,
-      color: 'bg-indigo-600',
-      hoverColor: 'hover:bg-indigo-700',
-      action: () => navigate('/document'),
-      available: false
-    },
-    {
-      id: 'ai-assistant',
-      title: 'AI智能助手',
-      description: '多功能AI助手，支持写作、翻译、总结等多种任务',
-      icon: Brain,
-      color: 'bg-pink-600',
-      hoverColor: 'hover:bg-pink-700',
-      action: () => navigate('/assistant'),
       available: false
     }
   ];

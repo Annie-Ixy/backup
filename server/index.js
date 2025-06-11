@@ -10,6 +10,12 @@ const { v4: uuidv4 } = require('uuid');
 const iconv = require('iconv-lite');
 require('dotenv').config();
 
+// 设计稿审核相关导入
+const designReviewConfig = require('./design-review-config');
+const fileProcessor = require('./design-review-utils/fileProcessor');
+const aiReviewer = require('./design-review-utils/aiReviewer');
+const reportGenerator = require('./design-review-utils/reportGenerator');
+
 const app = express();
 const PORT = process.env.PORT || 9000;
 
@@ -1180,8 +1186,224 @@ app.get('/api/debug/cache', (req, res) => {
   res.json(cacheInfo);
 });
 
+// ==================== 设计稿审核功能路由 ====================
+
+// 创建设计稿审核所需的目录
+const createDesignReviewDirectories = async () => {
+  const dirs = [designReviewConfig.UPLOAD_DIR, designReviewConfig.TEMP_DIR, designReviewConfig.OUTPUT_DIR];
+  for (const dir of dirs) {
+    await fs.mkdir(dir, { recursive: true });
+  }
+};
+
+// 设计稿审核文件上传配置
+const designReviewStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    await createDesignReviewDirectories();
+    cb(null, designReviewConfig.UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    // 使用统一的中文文件名解码功能
+    let originalName = file.originalname;
+    
+    try {
+      // 使用统一的编码处理函数
+      originalName = decodeFilename(originalName);
+      
+      // 生成安全的文件名，保留原始扩展名
+      const ext = path.extname(originalName);
+      const baseName = path.basename(originalName, ext);
+      const timestamp = Date.now();
+      const randomSuffix = Math.round(Math.random() * 1E9);
+      const safeName = `${file.fieldname}-${timestamp}-${randomSuffix}${ext}`;
+      
+      console.log(`设计稿文件保存: 原始="${file.originalname}" -> 处理后="${originalName}" -> 安全名称="${safeName}"`);
+      
+      // 将解码后的原始文件名存储在file对象中，供后续使用
+      file.decodedOriginalName = originalName;
+      
+      cb(null, safeName);
+      
+    } catch (error) {
+      console.log(`设计稿文件名处理失败: ${error.message}，使用时间戳命名`);
+      const ext = path.extname(file.originalname);
+      const timestamp = Date.now();
+      const randomSuffix = Math.round(Math.random() * 1E9);
+      const fallbackName = `${file.fieldname}-${timestamp}-${randomSuffix}${ext}`;
+      file.decodedOriginalName = file.originalname; // 保持原文件名
+      cb(null, fallbackName);
+    }
+  }
+});
+
+const designReviewUpload = multer({
+  storage: designReviewStorage,
+  limits: { fileSize: designReviewConfig.MAX_FILE_SIZE },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allSupportedTypes = [
+      ...designReviewConfig.SUPPORTED_FILE_TYPES.documents,
+      ...designReviewConfig.SUPPORTED_FILE_TYPES.images
+    ];
+    
+    if (allSupportedTypes.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${ext}`));
+    }
+  }
+});
+
+// 设计稿审核路由
+app.get('/api/design-review/config', (req, res) => {
+  res.json({
+    supportedLanguages: designReviewConfig.SUPPORTED_LANGUAGES,
+    reviewCategories: designReviewConfig.REVIEW_CATEGORIES,
+    supportedFileTypes: designReviewConfig.SUPPORTED_FILE_TYPES
+  });
+});
+
+app.post('/api/design-review/upload', designReviewUpload.array('files', 10), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    const uploadedFiles = req.files.map(file => ({
+      id: file.filename,
+      originalName: file.decodedOriginalName || file.originalname, // 使用解码后的文件名
+      path: file.path,
+      size: file.size,
+      type: path.extname(file.originalname).toLowerCase()
+    }));
+
+    res.json({
+      success: true,
+      files: uploadedFiles
+    });
+  } catch (error) {
+    console.error('Design review upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/design-review/process', async (req, res) => {
+  try {
+    const { fileIds, language, reviewCategories } = req.body;
+
+    if (!fileIds || fileIds.length === 0) {
+      return res.status(400).json({ error: 'No files specified' });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({ error: 'OpenAI API key not configured' });
+    }
+
+    const results = [];
+
+    for (const fileId of fileIds) {
+      const filePath = path.join(designReviewConfig.UPLOAD_DIR, fileId);
+      
+      try {
+        // Process file
+        const processedData = await fileProcessor.processFile(filePath);
+        // AI review
+        const reviewResult = await aiReviewer.reviewContent(
+          processedData,
+          language || 'zh-CN',
+          reviewCategories || ['basic', 'advanced']
+        );
+
+        results.push({
+          fileId,
+          success: true,
+          processedData,
+          reviewResult
+        });
+        console.log('results success', results);
+      } catch (error) {
+        console.error(`Error processing design review file ${fileId}:`, error);
+        results.push({
+          fileId,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      results
+    });
+  } catch (error) {
+    console.error('Design review processing error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/design-review/generate-report', async (req, res) => {
+  try {
+    const { fileId, reviewResult, processedData, format } = req.body;
+
+    if (!fileId || !reviewResult || !processedData) {
+      return res.status(400).json({ error: 'Missing required data' });
+    }
+
+    const reportFiles = await reportGenerator.generateReport(
+      reviewResult,
+      processedData,
+      designReviewConfig.OUTPUT_DIR,
+      format
+    );
+
+    res.json({
+      success: true,
+      reportFiles
+    });
+  } catch (error) {
+    console.error('Design review report generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/design-review/download/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    console.log('Download request for file:', filename);
+    
+    // 确保文件名安全，防止路径遍历攻击
+    const safeFilename = path.basename(filename);
+    const filePath = path.join(designReviewConfig.OUTPUT_DIR, safeFilename);
+    
+    console.log('Attempting to download file from:', filePath);
+    console.log('Output directory:', designReviewConfig.OUTPUT_DIR);
+    
+    // 检查文件是否存在
+    await fs.access(filePath);
+    
+    console.log('File exists, sending download...');
+    res.download(filePath, safeFilename);
+  } catch (error) {
+    console.error('Download error:', error);
+    console.log('File not found at path:', path.join(designReviewConfig.OUTPUT_DIR, req.params.filename));
+    
+    // 列出输出目录中的文件以便调试
+    try {
+      const files = await fs.readdir(designReviewConfig.OUTPUT_DIR);
+      console.log('Available files in output directory:', files);
+    } catch (dirError) {
+      console.log('Could not read output directory:', dirError.message);
+    }
+    
+    res.status(404).json({ error: 'File not found' });
+  }
+});
+
+// ==================== 设计稿审核功能路由结束 ====================
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Make sure to set OPENAI_API_KEY in your .env file`);
+  console.log(`Design review functionality integrated`);
 }); 

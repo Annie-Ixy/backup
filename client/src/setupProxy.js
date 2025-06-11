@@ -1,7 +1,8 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 module.exports = function(app) {
-  // 首先代理 /api 到本地服务器 (更具体的路径要放在前面)
+  // 统一后端API代理 - 所有API请求都指向端口9000
+  // 简历筛选测试API代理
   app.use(
     '/test',
     createProxyMiddleware({
@@ -10,12 +11,12 @@ module.exports = function(app) {
       pathRewrite: {
         '^/test': '', // 将 /test 重写为 ''
       },
-      logLevel: 'debug', // 开启调试日志
-      secure: false, // 本地开发不需要SSL验证
+      logLevel: 'debug',
+      secure: false,
     })
   );
 
-  // 然后代理其他 /dev-api 请求到远程服务器
+  // 用户认证API代理
   app.use(
     '/dev-api',
     createProxyMiddleware({
@@ -24,8 +25,8 @@ module.exports = function(app) {
       pathRewrite: {
         '^/dev-api': '', // 移除 /dev-api 前缀
       },
-      secure: true, // 支持 HTTPS
-      logLevel: 'debug', // 开启调试日志
+      secure: true,
+      logLevel: 'debug',
     })
   );
 }; 

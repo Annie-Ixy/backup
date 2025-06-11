@@ -2,8 +2,8 @@ import axios from 'axios';
 
 // 创建axios实例
 const request = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE_URL,
-  timeout: 10000, // 请求超时时间
+  baseURL: '',
+  timeout: 5 * 60 * 1000, // 请求超时时间
   headers: {
     'Content-Type': 'application/json',
   },
