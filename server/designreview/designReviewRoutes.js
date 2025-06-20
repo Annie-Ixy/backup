@@ -175,4 +175,69 @@ router.get('/api/design-review/download/:filename', async (req, res) => {
   }
 });
 
+// 新增删除文件接口
+router.delete('/api/design-review/clear-folders', async (req, res) => {
+  try {
+    const { folders = ['outputs', 'uploads'] } = req.body;
+    
+    const results = {};
+    
+    for (const folder of folders) {
+      try {
+        let targetDir;
+        if (folder === 'outputs') {
+          targetDir = designReviewConfig.OUTPUT_DIR;
+        } else if (folder === 'uploads') {
+          targetDir = designReviewConfig.UPLOAD_DIR;
+        } else {
+          results[folder] = { success: false, error: 'Invalid folder name' };
+          continue;
+        }
+        
+        // 检查目录是否存在
+        const exists = await fs.pathExists(targetDir);
+        if (!exists) {
+          results[folder] = { success: false, error: 'Folder does not exist' };
+          continue;
+        }
+        
+        // 读取目录内容
+        const files = await fs.readdir(targetDir);
+        
+        // 删除所有文件
+        for (const file of files) {
+          const filePath = path.join(targetDir, file);
+          const stat = await fs.stat(filePath);
+          if (stat.isFile()) {
+            await fs.remove(filePath);
+          } else if (stat.isDirectory()) {
+            await fs.remove(filePath);
+          }
+        }
+        
+        results[folder] = { 
+          success: true, 
+          message: `Cleared ${files.length} items from ${folder}`,
+          clearedItems: files.length
+        };
+        
+        console.log(`Cleared ${folder} folder: ${files.length} items removed`);
+        
+      } catch (error) {
+        console.error(`Error clearing ${folder} folder:`, error);
+        results[folder] = { success: false, error: error.message };
+      }
+    }
+    
+    res.json({
+      success: true,
+      results
+    });
+    
+  } catch (error) {
+    console.error('Clear folders error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router; 

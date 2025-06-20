@@ -27,13 +27,13 @@ function Resume() {
   // Poll for results when jobId is set
   useEffect(() => {
     if (isLoginIndex === 0) {
+      isLoginIndex++;
       isLogin().then(res => {
-        isLoginIndex++;
-      if (!res) {
-        sessionStorage.removeItem('token');
-        navigate('/login');
-      }
-    })
+        if (!res) {
+          sessionStorage.removeItem('token');
+          navigate('/login');
+        }
+      })
     }
     if (!jobId) return;
 

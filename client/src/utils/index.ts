@@ -17,6 +17,7 @@ export const isLogin = async() => {
         if (res.code === 0) {
             return true;
         } else {
+            sessionStorage.removeItem('token');
             return false;
         }
     } catch (error) {

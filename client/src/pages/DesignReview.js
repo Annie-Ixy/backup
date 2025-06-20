@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import DesignFileUpload from '../components/DesignFileUpload';
 import { designReviewApiService } from '../services/designReviewApi';
+import { isLogin } from '../utils/index.ts';
 
 function DesignReview() {
   const navigate = useNavigate();
@@ -34,12 +35,16 @@ function DesignReview() {
   const [currentProcessingFile, setCurrentProcessingFile] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState(null);
-
+  let isLoginIndex = 0;
+  
   useEffect(() => {
-    const isLoggedIn = localStorage.getItem('isLoggedIn');
-    if (!isLoggedIn) {
-      navigate('/login');
-      return;
+    if (isLoginIndex === 0) {
+      isLoginIndex++;
+      isLogin().then(res => {
+        if (!res) {
+          navigate('/login');
+        }
+      })
     }
     loadConfig();
   }, [navigate]);

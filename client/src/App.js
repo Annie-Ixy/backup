@@ -1,28 +1,42 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Resume from './pages/Resume';
 import DesignReview from './pages/DesignReview';
 import ProtectedRoute from './components/ProtectedRoute';
+import { isLogin } from './utils/index.ts';
 
 // 路由拦截组件
 function RouteInterceptor() {
   const location = useLocation();
+  const navigate = useNavigate();
   
-  // 如果路径包含 /api/pdf，不做拦截处理
-  if (location.pathname.includes('/api/pdf')) {
-    return null;
-  }
+  // 在路由切换时调用 isLogin 方法
+  useEffect(() => {
+    const checkLoginStatus = async () => {
+      try {
+        const res = await isLogin();
+        if (!res) {
+          navigate('/login');
+        }
+      } catch (error) {
+        console.error('检查登录状态失败:', error);
+        navigate('/login');
+      }
+    };
+    
+    // 如果路径包含 /api/pdf，不做拦截处理
+    if (location.pathname.includes('/api/pdf')) {
+      return;
+    }
+    
+    // 每次路由切换都调用 isLogin 方法
+    checkLoginStatus();
+  }, [location.pathname, navigate]); // 添加navigate到依赖项
   
-  // 检查是否有token和登录状态
-  const token = sessionStorage.getItem('token');
-  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-  
-  // 如果有token或者已登录状态为true，说明已经登录了，直接跳转/home，否则跳转登录页面
-  const hasValidAuth = token || isLoggedIn;
-  
-  return hasValidAuth ? <Navigate to="/home" replace /> : <Navigate to="/login" replace />;
+  // 返回null，让useEffect处理导航
+  return null;
 }
 
 function App() {

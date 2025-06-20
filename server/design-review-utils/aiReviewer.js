@@ -15,10 +15,28 @@ class AIReviewer {
     }
   }
 
-  async reviewContent(processedData, targetLanguage = 'zh-CN', reviewCategories = ['basic', 'advanced']) {
+  // Validate target language
+  validateTargetLanguage(targetLanguage) {
+    if (!targetLanguage) {
+      console.warn('Target language is not provided, using default: zh-CN');
+      return 'zh-CN';
+    }
+    
+    if (!config.SUPPORTED_LANGUAGES[targetLanguage]) {
+      console.warn(`Unsupported target language: ${targetLanguage}, using default: zh-CN`);
+      return 'zh-CN';
+    }
+    
+    return targetLanguage;
+  }
+
+  async reviewContent(processedData, targetLanguage, reviewCategories = ['basic', 'advanced']) {
     if (!this.openai) {
       throw new Error('OpenAI API key not configured');
     }
+
+    // Validate target language
+    targetLanguage = this.validateTargetLanguage(targetLanguage);
 
     try {
       const content = this.extractContentForReview(processedData);
@@ -27,6 +45,12 @@ class AIReviewer {
       if (content && typeof content === 'object' && content.isImageBased) {
         console.log('Processing image-based PDF with vision analysis...');
         return await this.reviewImageBasedPDF(content.pageImages, targetLanguage, reviewCategories);
+      }
+      
+      // Check if this is a single image with poor OCR results
+      if (processedData.type === 'image' && this.shouldUseVisionAnalysis(processedData)) {
+        console.log('OCR confidence too low, switching to vision analysis...');
+        return await this.reviewSingleImageWithVision(processedData, targetLanguage, reviewCategories);
       }
       
       const prompt = this.buildReviewPrompt(content, targetLanguage, reviewCategories);
@@ -39,7 +63,7 @@ class AIReviewer {
         messages: [
           {
             role: 'system',
-            content: this.getSystemPrompt(targetLanguage)
+            content: this.getSystemPrompt(targetLanguage) // Always use English for analysis
           },
           {
             role: 'user',
@@ -61,6 +85,41 @@ class AIReviewer {
       console.log('--- End of AI Response ---');
 
       const reviewResult = this.parseAIResponse(response.choices[0].message.content);
+      
+      // Filter out false positives
+      if (reviewResult.issues) {
+        // Get the original content for validation
+        const originalContent = this.extractContentForReview(processedData);
+        const contentText = typeof originalContent === 'string' ? originalContent : '';
+        
+        const originalIssueCount = reviewResult.issues.length;
+        console.log(`\n=== AI Result Validation ===`);
+        console.log(`Original issues count: ${originalIssueCount}`);
+        
+        reviewResult.issues = reviewResult.issues.filter(issue => {
+          // First apply OCR-specific validation if applicable
+          const ocrValid = this.validateOCRResult(issue);
+          if (!ocrValid) {
+            console.log(`Filtering out OCR issue: "${issue.original_text}" (confidence: ${issue.confidence})`);
+            return false;
+          }
+          
+          // Then apply AI result validation
+          const aiValid = this.validateAIResult(issue, contentText);
+          if (!aiValid) {
+            console.log(`Filtering out AI issue: "${issue.original_text}" - not found in original content or false positive`);
+            return false;
+          }
+          
+          return true;
+        });
+        
+        const filteredIssueCount = reviewResult.issues.length;
+        const filteredCount = originalIssueCount - filteredIssueCount;
+        console.log(`Filtered issues count: ${filteredIssueCount}`);
+        console.log(`Issues filtered out: ${filteredCount}`);
+        console.log(`=== End AI Result Validation ===\n`);
+      }
       
       // === 精确位置补充 begin ===
       function addPreciseLocationToIssues(issues, fullText) {
@@ -105,18 +164,13 @@ class AIReviewer {
         metadata: {
           reviewedAt: new Date().toISOString(),
           language: targetLanguage,
-          categories: reviewCategories
+          categories: reviewCategories,
+          analysisType: 'text',
+          analysisLanguage: 'en' // Indicate that analysis was done in English
         }
       };
     } catch (error) {
-      console.error('AI review error:', error);
-      
-      // 如果是连接错误，切换到模拟模式
-      if (error.message && (error.message.includes('Connection error') || error.message.includes('ETIMEDOUT') || error.message.includes('ECONNRESET'))) {
-        console.log('Falling back to simulation mode due to API connection error');
-        return this.generateSimulatedReview(processedData, targetLanguage, reviewCategories);
-      }
-      
+      console.error('Review error:', error);
       throw error;
     }
   }
@@ -150,16 +204,6 @@ class AIReviewer {
   }
 
   getSystemPrompt(targetLanguage) {
-    const languageInstructions = {
-      'zh-CN': '请用中文回复。',
-      'en': 'Please respond in English.',
-      'es': 'Por favor responde en español.',
-      'fr': 'Veuillez répondre en français.',
-      'de': 'Bitte antworten Sie auf Deutsch.',
-      'ja': '日本語で返信してください。',
-      'ko': '한국어로 답변해 주세요.'
-    };
-
     return `You are a professional content reviewer specializing in product design documentation for Petlibro pet products. 
 Your task is to review content for accuracy, consistency, and quality. 
 Focus on:
@@ -170,9 +214,18 @@ Focus on:
 5. Formatting consistency
 6. Contextual appropriateness
 
-${languageInstructions[targetLanguage] || languageInstructions['en']}
+CRITICAL REQUIREMENTS:
+- ONLY report issues that actually exist in the provided content
+- DO NOT generate or invent spelling errors that are not present in the text
+- DO NOT report common words like "the", "and", "is", "are" as spelling errors
+- DO NOT report partial words or OCR artifacts as spelling errors
+- Verify that each reported issue actually appears in the original content before reporting it
+- If you're unsure about a potential issue, do not report it
 
-IMPORTANT: Return ONLY valid JSON without any additional text or markdown formatting. Your response must start with { and end with }.
+IMPORTANT: 
+- Analysis language: English (always)
+- Target language: ${config.SUPPORTED_LANGUAGES[targetLanguage] || 'Unknown'}
+- Please respond in English regardless of the target language
 
 Return your response in JSON format with the following structure:
 {
@@ -181,7 +234,7 @@ Return your response in JSON format with the following structure:
       "type": "spelling|grammar|consistency|terminology|brand|technical|formatting",
       "severity": "high|medium|low",
       "location": "specific location in text",
-      "original_text": "the problematic text",
+      "original_text": "the problematic text (must exist in content)",
       "suggested_fix": "corrected text",
       "explanation": "why this is an issue",
       "confidence": 0.0-1.0,
@@ -207,17 +260,22 @@ Return your response in JSON format with the following structure:
     console.log('Building review prompt:');
     console.log('- Content length:', content.length, 'characters');
     console.log('- Content preview:', content.substring(0, 200));
-    console.log('- Target language:', targetLanguage);
+    console.log('- Target language:', targetLanguage, `(${config.SUPPORTED_LANGUAGES[targetLanguage] || 'Unknown'})`);
     console.log('- Review categories:', reviewCategories);
+    console.log('- Analysis language: English (always)');
 
     return `Please review the following content for Petlibro product documentation.
 Focus on: ${selectedCategories}
-Target language: ${config.SUPPORTED_LANGUAGES[targetLanguage]}
+
+Language Information:
+- Analysis language: English (always)
+- Target language: ${config.SUPPORTED_LANGUAGES[targetLanguage] || 'Unknown'}
+- Please provide analysis and corrections in English
 
 Content to review:
 ${content}
 
-Please identify all issues and provide specific corrections.`;
+Please identify all issues and provide specific corrections in English.`;
   }
 
   parseAIResponse(responseContent) {
@@ -268,7 +326,7 @@ Please identify all issues and provide specific corrections.`;
       const messages = [
         {
           role: 'system',
-          content: this.getVisionSystemPrompt(targetLanguage)
+          content: this.getVisionSystemPrompt('en') // Always use English for vision analysis
         },
         {
           role: 'user',
@@ -322,6 +380,33 @@ Please identify all issues and provide specific corrections.`;
 
       const reviewResult = this.parseAIResponse(response.choices[0].message.content);
       
+      // Filter out false positives for vision analysis
+      if (reviewResult.issues) {
+        // For vision analysis, we can't easily validate against text content
+        // but we can still filter out obvious false positives
+        const originalIssueCount = reviewResult.issues.length;
+        console.log(`\n=== Vision Analysis Result Validation ===`);
+        console.log(`Original issues count: ${originalIssueCount}`);
+        
+        reviewResult.issues = reviewResult.issues.filter(issue => {
+          // Apply false positive detection
+          const isFalsePositive = this.isFalsePositive(issue.original_text, issue.type);
+          if (isFalsePositive) {
+            console.log(`Filtering out vision analysis false positive: "${issue.original_text}"`);
+            return false;
+          }
+          
+          // Require reasonable confidence for vision analysis
+          return (issue.confidence || 0) >= 75;
+        });
+        
+        const filteredIssueCount = reviewResult.issues.length;
+        const filteredCount = originalIssueCount - filteredIssueCount;
+        console.log(`Filtered issues count: ${filteredIssueCount}`);
+        console.log(`Issues filtered out: ${filteredCount}`);
+        console.log(`=== End Vision Analysis Result Validation ===\n`);
+      }
+      
       return {
         issues: reviewResult.issues || [],
         review_summary: this.generateSummary(reviewResult.issues),
@@ -332,7 +417,8 @@ Please identify all issues and provide specific corrections.`;
           language: targetLanguage,
           categories: reviewCategories,
           analysisType: 'vision',
-          pagesAnalyzed: pageImages.length
+          pagesAnalyzed: pageImages.length,
+          analysisLanguage: 'en' // Indicate that analysis was done in English
         }
       };
     } catch (error) {
@@ -342,16 +428,6 @@ Please identify all issues and provide specific corrections.`;
   }
 
   getVisionSystemPrompt(targetLanguage) {
-    const languageInstructions = {
-      'zh-CN': '请用中文回复。',
-      'en': 'Please respond in English.',
-      'es': 'Por favor responde en español.',
-      'fr': 'Veuillez répondre en français.',
-      'de': 'Bitte antworten Sie auf Deutsch.',
-      'ja': '日本語で返信してください。',
-      'ko': '한국어로 답변해 주세요.'
-    };
-
     return `You are a professional content reviewer with vision capabilities, specializing in product design documentation for Petlibro pet products. 
 Your task is to analyze PDF pages visually and review content for accuracy, consistency, and quality. 
 Focus on:
@@ -363,15 +439,24 @@ Focus on:
 6. Layout and design quality
 7. Image quality and relevance
 
+CRITICAL REQUIREMENTS:
+- ONLY report issues that actually exist in the provided images
+- DO NOT generate or invent spelling errors that are not visible in the text
+- DO NOT report common words like "the", "and", "is", "are" as spelling errors
+- DO NOT report partial words or OCR artifacts as spelling errors
+- Verify that each reported issue actually appears in the image before reporting it
+- If you're unsure about a potential issue, do not report it
+
 CRITICAL REQUIREMENT FOR LOCATION FIELD:
 - Always specify the exact page number and detailed area description
-- Format: "第X页，[具体区域描述]" (for Chinese) or "Page X, [specific area]" (for English)
-- Examples: "第1页，标题区域", "第2页，左侧产品介绍", "第3页，页脚联系方式"
+- Format: "Page X, [specific area description]"
+- Examples: "Page 1, title area", "Page 2, left side product description", "Page 3, footer contact information"
 - Be as specific as possible about the location within each page
 
-${languageInstructions[targetLanguage] || languageInstructions['en']}
-
-IMPORTANT: Return ONLY valid JSON without any additional text or markdown formatting. Your response must start with { and end with }.
+IMPORTANT: 
+- Analysis language: English (always)
+- Target language: ${config.SUPPORTED_LANGUAGES[targetLanguage] || 'Unknown'}
+- Please respond in English regardless of the target language
 
 Return your response in JSON format with the following structure:
 {
@@ -379,8 +464,8 @@ Return your response in JSON format with the following structure:
     {
       "type": "spelling|grammar|consistency|terminology|brand|technical|formatting|visual",
       "severity": "high|medium|low",
-      "location": "第X页，具体区域描述 (详细描述页面位置)",
-      "original_text": "the problematic text or description",
+      "location": "Page X, specific area description (detailed page location)",
+      "original_text": "the problematic text or description (must exist in image)",
       "suggested_fix": "corrected text or suggestion",
       "explanation": "why this is an issue",
       "confidence": 0.0-1.0,
@@ -428,7 +513,7 @@ Return your response in JSON format with the following structure:
 
   // 添加模拟审核功能
   generateSimulatedReview(processedData, targetLanguage = 'zh-CN', reviewCategories = ['basic', 'advanced']) {
-    console.log('Generating simulated design review...');
+    console.log('Generating simulated design review in English...');
     
     const content = this.extractContentForReview(processedData);
     const contentLength = typeof content === 'string' ? content.length : 0;
@@ -442,10 +527,10 @@ Return your response in JSON format with the following structure:
         simulatedIssues.push({
           type: 'spelling',
           severity: 'low',
-          location: '第1页，文档标题区域',
-          original_text: '示例文本',
-          suggested_fix: '修正后的文本',
-          explanation: '模拟发现的拼写问题',
+          location: 'Page 1, document title area',
+          original_text: 'Sample text',
+          suggested_fix: 'Corrected text',
+          explanation: 'Simulated spelling issue found',
           confidence: 0.8,
           category: 'basic'
         });
@@ -454,10 +539,10 @@ Return your response in JSON format with the following structure:
       simulatedIssues.push({
         type: 'formatting',
         severity: 'medium',
-        location: '第1页，整体布局格式',
-        original_text: '格式不一致',
-        suggested_fix: '统一格式标准',
-        explanation: '建议保持格式一致性',
+        location: 'Page 1, overall layout formatting',
+        original_text: 'Inconsistent formatting',
+        suggested_fix: 'Unified formatting standards',
+        explanation: 'Recommend maintaining formatting consistency',
         confidence: 0.7,
         category: 'basic'
       });
@@ -468,10 +553,10 @@ Return your response in JSON format with the following structure:
       simulatedIssues.push({
         type: 'brand',
         severity: 'high',
-        location: '第1页，页眉品牌标识区域',
+        location: 'Page 1, header brand logo area',
         original_text: 'Petlibro',
         suggested_fix: 'Petlibro',
-        explanation: '品牌名称使用正确',
+        explanation: 'Brand name usage is correct',
         confidence: 0.9,
         category: 'advanced'
       });
@@ -480,10 +565,10 @@ Return your response in JSON format with the following structure:
         simulatedIssues.push({
           type: 'consistency',
           severity: 'medium',
-          location: '第2页，产品描述段落',
-          original_text: '术语不统一',
-          suggested_fix: '统一术语标准',
-          explanation: '建议在文档中保持术语一致性',
+          location: 'Page 2, product description paragraph',
+          original_text: 'Inconsistent terminology',
+          suggested_fix: 'Unified terminology standards',
+          explanation: 'Recommend maintaining terminology consistency throughout the document',
           confidence: 0.8,
           category: 'advanced'
         });
@@ -496,13 +581,13 @@ Return your response in JSON format with the following structure:
     const qualityScore = Math.max(60, baseScore - deduction);
     
     const recommendations = [
-      '建议统一文档格式标准',
-      '保持品牌名称使用的一致性',
-      '定期检查拼写和语法错误'
+      'Recommend unified document formatting standards',
+      'Maintain consistency in brand name usage',
+      'Regularly check for spelling and grammar errors'
     ];
     
     if (contentLength === 0) {
-      recommendations.push('文档内容为空，建议添加相关内容');
+      recommendations.push('Document content is empty, recommend adding relevant content');
     }
     
     return {
@@ -514,39 +599,658 @@ Return your response in JSON format with the following structure:
         reviewedAt: new Date().toISOString(),
         language: targetLanguage,
         categories: reviewCategories,
-        mode: 'simulation'
+        mode: 'simulation',
+        analysisLanguage: 'en' // Indicate that analysis was done in English
       }
     };
   }
 
   async performOCR(imagePath) {
+    let preprocessedPath = null;
     try {
-      // 1. 预处理图片
-      const preprocessedPath = imagePath + '_preprocessed.png';
+      // 1. Enhanced image preprocessing with better optimization for text
+      preprocessedPath = imagePath + '_preprocessed.png';
       await sharp(imagePath)
-        .grayscale() // 灰度
-        .threshold(180) // 二值化，阈值可调
+        .grayscale() // Convert to grayscale
+        .normalize() // Normalize the image contrast
+        .modulate({
+          brightness: 1.1,  // Slightly increase brightness
+          contrast: 1.2    // Increase contrast
+        })
+        .threshold(200) // Increased threshold for better text/background separation
+        .sharpen({ // Enhanced sharpening for better text clarity
+          sigma: 1.2,
+          m1: 1.0,
+          m2: 2.0,
+          x1: 2,
+          y2: 10,
+          y3: 15
+        })
         .toFile(preprocessedPath);
 
-      // 2. 用Tesseract识别预处理后的图片
-      const result = await Tesseract.recognize(preprocessedPath, 'chi_sim+eng', {
-        logger: m => console.log(m)
+      // 2. Configure Tesseract with optimized settings
+      const result = await Tesseract.recognize(preprocessedPath, 'eng', {  // Changed to English only
+        logger: m => console.log(m),
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?()-_°()• ',
+        tessedit_pageseg_mode: '6',
+        tessedit_do_invert: '0',
+        language_model_penalty_non_dict_word: '0.8',
+        language_model_penalty_spacing: '0.5',
+        textord_heavy_nr: '1',
+        preserve_interword_spaces: '1',
+        tessedit_enable_dict_correction: '1',
+        tessedit_enable_bigram_correction: '1',
+        tessedit_write_images: '1',
+        tessedit_create_hocr: '1',
+        tessedit_ocr_engine_mode: '3',
+        load_system_dawg: '1',
+        load_freq_dawg: '1',
+        tessedit_char_blacklist: '{}[]|\\'
       });
 
-      // 3. 删除临时文件
-      await fs.unlink(preprocessedPath);
+      console.log('Original OCR text:', result.data.text);
+      
+      // 3. Process the OCR result
+      let processedText = await this.processOCRResult(result.data);
+      
+      // 4. Apply bullet point fixes
+      processedText = this.fixBulletPoints(processedText);
+      
+      console.log('Processed OCR text:', processedText);
 
+      // 5. Delete temporary file
+      await fs.unlink(preprocessedPath).catch(err => {
+        console.warn('Failed to delete temporary file:', err);
+      });
+
+      // 6. Return processed results with confidence score
       return {
-        text: result.data.text,
-        confidence: result.data.confidence
+        text: processedText,
+        confidence: result.data.confidence,
+        words: result.data.words.map(word => ({
+          text: word.text,
+          confidence: word.confidence,
+          bbox: word.bbox
+        }))
       };
     } catch (error) {
-      console.error('OCR error:', error);
+      console.error('Enhanced OCR error:', error);
+      console.error('Error details:', error.stack);
+      
+      // Try to clean up temporary file even if OCR failed
+      if (preprocessedPath) {
+        try {
+          await fs.unlink(preprocessedPath);
+        } catch (unlinkError) {
+          console.warn('Failed to delete temporary file after error:', unlinkError);
+        }
+      }
+      
       return {
         text: '',
-        confidence: 0
+        confidence: 0,
+        words: []
       };
     }
+  }
+
+  // Helper method to fix bullet points
+  fixBulletPoints(text) {
+    if (!text) return text;
+
+    let processed = text;
+
+    // Fix common bullet point issues
+    processed = processed
+      // Fix bullet points that got split
+      .replace(/([•])\s+([A-Z])/g, '$1 $2')
+      // Fix missing spaces after bullet points
+      .replace(/([•])([A-Za-z])/g, '$1 $2')
+      // Fix multiple bullet points
+      .replace(/[•]{2,}/g, '•')
+      // Fix bullet points with extra characters
+      .replace(/[-~+]\s*[•]/g, '•')
+      .replace(/[•]\s*[-~+]/g, '•')
+      // Ensure proper spacing around bullet points
+      .replace(/\s*[•]\s*/g, '\n• ')
+      // Remove bullet points at the end of lines
+      .replace(/[•]\s*$/g, '')
+      // Remove bullet points at the start of the text
+      .replace(/^\s*[•]\s*/g, '');
+
+    return processed;
+  }
+
+  // Helper method to process OCR result
+  async processOCRResult(ocrData) {
+    if (!ocrData || !ocrData.text) return '';
+    
+    let processedText = ocrData.text;
+    const lines = processedText.split('\n');
+    
+    // Process each line
+    const processedLines = lines.map((line, index) => {
+      // Check if this line might be a title
+      if (this.isTitleLine(line, ocrData.words, index)) {
+        return this.processTitleLine(line);
+      }
+      
+      // Check if this is a bullet point line
+      if (line.includes('•') || line.match(/^\s*[-*+]\s/)) {
+        return this.processBulletPointLine(line);
+      }
+      
+      return this.processContentLine(line);
+    });
+    
+    return processedLines.join('\n');
+  }
+
+  // Helper method to identify title lines
+  isTitleLine(line, words, lineIndex) {
+    if (!line || !words) return false;
+    
+    // Title characteristics
+    const isAllCaps = line.toUpperCase() === line;
+    const hasUnderline = line.includes('_') || line.includes('-');
+    const isShortLine = line.length < 50;
+    const wordsInLine = line.trim().split(/\s+/).length;
+    
+    // Find words that belong to this line
+    const lineWords = words.filter(word => {
+      const wordText = word.text || '';
+      return line.includes(wordText);
+    });
+    
+    // Check font size (titles usually have larger font)
+    const avgHeight = lineWords.reduce((sum, word) => sum + (word.bbox ? word.bbox.height : 0), 0) / (lineWords.length || 1);
+    const isLargerFont = avgHeight > 20; // Adjust threshold as needed
+    
+    return (isAllCaps || hasUnderline) && isShortLine && isLargerFont && wordsInLine <= 5;
+  }
+
+  // Helper method to process title lines
+  processTitleLine(line) {
+    if (!line) return line;
+    
+    // Remove common OCR artifacts from titles
+    let processed = this.cleanOCRText(line);
+    
+    // Special handling for known title patterns
+    const titlePatterns = [
+      {
+        pattern: /和\s*\\\s*a\s*SR\s*2\s*、\s*SAFETY\s*ONS/i,
+        replacement: 'SAFETY INSTRUCTIONS'
+      },
+      {
+        pattern: /SAFETY\s*[A-Z]*\s*ONS/i,
+        replacement: 'SAFETY INSTRUCTIONS'
+      },
+      {
+        pattern: /SAFETY\s*[A-Z]*\s*IONS/i,
+        replacement: 'SAFETY INSTRUCTIONS'
+      }
+    ];
+    
+    // Apply title patterns
+    for (const pattern of titlePatterns) {
+      if (pattern.pattern.test(processed)) {
+        processed = pattern.replacement;
+        break;
+      }
+    }
+    
+    // Ensure title is in uppercase
+    processed = processed.toUpperCase();
+    
+    return processed;
+  }
+
+  // Helper method to process content lines
+  processContentLine(line) {
+    if (!line) return line;
+    
+    // First clean up obvious garbage and artifacts
+    let processed = this.removeGarbage(line);
+    
+    // Then clean up OCR artifacts
+    processed = this.cleanOCRText(processed);
+    
+    // Fix temperature expressions
+    processed = this.fixTemperatureFormat(processed);
+    
+    // Fix known patterns
+    processed = this.fixKnownPatterns(processed);
+    
+    // Final normalization
+    processed = this.normalizeTextFormatting(processed);
+    
+    return processed;
+  }
+
+  // Helper method to process bullet point lines
+  processBulletPointLine(line) {
+    if (!line) return line;
+    
+    // First clean up obvious garbage and artifacts
+    let processed = this.removeGarbage(line);
+    
+    // Then clean up OCR artifacts
+    processed = this.cleanOCRText(processed);
+    
+    // Fix bullet point format
+    processed = processed
+      // Normalize bullet point character
+      .replace(/[-*+]\s/, '• ')
+      // Ensure proper spacing after bullet point
+      .replace(/^(•\s*)/, '• ')
+      // Remove any extra bullet points
+      .replace(/[•]{2,}/, '•')
+      // Fix common OCR mistakes in bullet points
+      .replace(/[oO0]\s+/, '• ')
+      .replace(/[\[({]/, '•');
+    
+    // Fix temperature expressions if present
+    processed = this.fixTemperatureFormat(processed);
+    
+    // Fix known patterns
+    processed = this.fixKnownPatterns(processed);
+    
+    // Final normalization
+    processed = this.normalizeTextFormatting(processed);
+    
+    return processed;
+  }
+
+  // New method to remove garbage text and symbols
+  removeGarbage(text) {
+    if (!text) return text;
+
+    // Remove common garbage patterns
+    let cleaned = text
+      // Remove "和 a SR 2 、 SAFETY ONS" pattern
+      .replace(/和\s*a\s*SR\s*2\s*、\s*SAFETY\s*ONS/g, '')
+      // Remove "«" and "»" symbols
+      .replace(/[«»]/g, '')
+      // Remove Chinese characters
+      .replace(/[一-龥]/g, '')
+      // Remove vertical bars and plus signs at the end
+      .replace(/\s*\|\s*\+\s*$/, '')
+      // Remove multiple spaces
+      .replace(/\s+/g, ' ')
+      // Trim the result
+      .trim();
+
+    return cleaned;
+  }
+
+  // Simplified temperature format fixing
+  fixTemperatureFormat(text) {
+    if (!text) return text;
+
+    let processed = text;
+
+    // Fix the specific temperature pattern
+    processed = processed
+      // Fix "orabove" -> "or above"
+      .replace(/\s*orabove\s*/g, ' or above ')
+      // Fix degree symbol and spaces around it
+      .replace(/(\d+)\s*[°º]\s*([CF])/g, '$1°$2')
+      // Fix spaces around parentheses
+      .replace(/\s*\(\s*(\d+°[CF])\s*\)\s*/g, ' ($1) ')
+      // Ensure proper spacing around "or"
+      .replace(/\s*(or)\s*/g, ' $1 ')
+      // Clean up any double spaces
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return processed;
+  }
+
+  // Update cleanOCRText to be more focused
+  cleanOCRText(text) {
+    if (!text) return text;
+    
+    let cleaned = text;
+    
+    // Basic character replacements
+    const replacements = {
+      '°': '°',  // Keep degree symbol
+      'º': '°',  // Standardize degree symbol
+      '℃': '°C', // Convert single character Celsius
+      '℉': '°F', // Convert single character Fahrenheit
+      '（': '(',  // Convert full-width parentheses
+      '）': ')',
+      '·': '',   // Remove middle dots
+      '…': '',   // Remove ellipsis
+      '—': '-',  // Convert em dash to hyphen
+      '–': '-',  // Convert en dash to hyphen
+      '"': '"',  // Convert smart quotes
+      "'": "'",  // Convert smart apostrophes
+      "'": "'"
+    };
+    
+    // Apply replacements
+    Object.entries(replacements).forEach(([char, replacement]) => {
+      cleaned = cleaned.replace(new RegExp(char, 'g'), replacement);
+    });
+    
+    // Remove any remaining non-standard characters
+    cleaned = cleaned.replace(/[^\x20-\x7E°]/g, ' ');
+    
+    // Normalize spaces
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    return cleaned;
+  }
+
+  // Update normalizeTextFormatting to be more conservative
+  normalizeTextFormatting(text) {
+    if (!text) return text;
+    
+    let normalized = text;
+    
+    // Basic formatting fixes
+    normalized = normalized
+      // Fix multiple spaces
+      .replace(/\s+/g, ' ')
+      // Fix space before punctuation
+      .replace(/\s+([.,!?])/g, '$1')
+      // Ensure space after punctuation
+      .replace(/([.,!?])([^\s])/g, '$1 $2')
+      // Trim the result
+      .trim();
+    
+    return normalized;
+  }
+
+  // Add a new method to validate OCR results
+  validateOCRResult(issue) {
+    // Skip validation for non-OCR related issues
+    if (!issue.ocr_related) return true;
+
+    const confidenceThreshold = 90; // Minimum confidence score to accept an issue
+    
+    // Validate based on issue type
+    switch (issue.type) {
+      case 'spelling':
+        // Higher threshold for spelling issues
+        return issue.confidence >= confidenceThreshold + 5;
+      
+      case 'punctuation':
+        // Stricter validation for punctuation
+        if (issue.original_text.match(/[,;]\s*[,;]/)) {
+          return issue.confidence >= confidenceThreshold + 10;
+        }
+        return issue.confidence >= confidenceThreshold;
+      
+      case 'terminology':
+        // Check for common false positives in terminology
+        if (issue.original_text.match(/^[a-z]+$/i)) { // Single word
+          return false; // Don't split single words
+        }
+        return issue.confidence >= confidenceThreshold;
+      
+      default:
+        return issue.confidence >= confidenceThreshold;
+    }
+  }
+
+  // New method to validate AI-generated issues against original content
+  validateAIResult(issue, originalContent) {
+    if (!issue || !originalContent) {
+      console.log(`Skipping validation: issue=${!!issue}, content=${!!originalContent}`);
+      return false;
+    }
+    
+    const originalText = (issue.original_text || '').trim();
+    if (!originalText) {
+      console.log(`Skipping validation: empty original_text`);
+      return false;
+    }
+    
+    // Check if the reported text actually exists in the original content
+    const existsInContent = originalContent.includes(originalText);
+    
+    // Additional validation for common false positives
+    const isFalsePositive = this.isFalsePositive(originalText, issue.type);
+    
+    // Log validation details for debugging
+    console.log(`Validating issue: "${originalText}" (type: ${issue.type}, confidence: ${issue.confidence})`);
+    console.log(`- Exists in content: ${existsInContent}`);
+    console.log(`- Is false positive: ${isFalsePositive}`);
+    
+    // For spelling issues, be extra careful
+    if (issue.type === 'spelling') {
+      // Check if it's a common OCR artifact or false positive
+      if (isFalsePositive) {
+        console.log(`Filtering out false positive spelling issue: "${originalText}"`);
+        return false;
+      }
+      
+      // For spelling issues, require higher confidence and existence in content
+      const isValid = existsInContent && (issue.confidence || 0) >= 85;
+      if (!isValid) {
+        console.log(`Filtering out spelling issue: "${originalText}" - exists: ${existsInContent}, confidence: ${issue.confidence}`);
+      }
+      return isValid;
+    }
+    
+    // For other issue types, require existence in content and reasonable confidence
+    const isValid = existsInContent && (issue.confidence || 0) >= 70;
+    if (!isValid) {
+      console.log(`Filtering out issue: "${originalText}" - exists: ${existsInContent}, confidence: ${issue.confidence}`);
+    }
+    return isValid;
+  }
+
+  // Helper method to identify common false positives
+  isFalsePositive(text, issueType) {
+    if (!text) return false;
+    
+    // Common false positive patterns
+    const falsePositivePatterns = [
+      // Common OCR artifacts that look like spelling errors
+      /^[a-z]{1,3}$/i,  // Very short words (1-3 characters)
+      /^[0-9]+$/,       // Pure numbers
+      /^[^a-zA-Z0-9\s]+$/, // Pure symbols
+      /^[a-z]+[0-9]+$/i,   // Words with numbers (like OCR artifacts)
+      /^[0-9]+[a-z]+$/i,   // Numbers with letters
+      /^[a-z]+[^a-zA-Z0-9\s]+$/i, // Words with symbols
+      /^[^a-zA-Z0-9\s]+[a-z]+$/i, // Symbols with words
+    ];
+    
+    // Check against patterns
+    for (const pattern of falsePositivePatterns) {
+      if (pattern.test(text)) {
+        console.log(`Pattern match for false positive: "${text}" matches ${pattern}`);
+        return true;
+      }
+    }
+    
+    // Specific false positive words for spelling issues
+    if (issueType === 'spelling') {
+      const commonFalsePositives = [
+        'teh', 'teh', 'teh', // Common OCR artifact for "the"
+        'th', 'th', 'th',    // Partial words
+        'a', 'an', 'the',    // Articles that might be flagged
+        'is', 'are', 'was', 'were', // Common verbs
+        'in', 'on', 'at', 'to', 'for', // Prepositions
+        'and', 'or', 'but', 'if', 'of', // Conjunctions and common words
+        'it', 'its', 'it\'s', // Common pronouns
+        'he', 'she', 'they', 'we', 'you', // Pronouns
+        'this', 'that', 'these', 'those', // Demonstratives
+        'have', 'has', 'had', 'do', 'does', 'did', // Auxiliary verbs
+        'can', 'will', 'would', 'could', 'should', 'may', 'might', // Modal verbs
+        'not', 'no', 'yes', 'yes', // Negatives and affirmatives
+        'up', 'down', 'out', 'off', 'over', 'under', // Directional words
+        'here', 'there', 'where', 'when', 'why', 'how', // Question words
+        'all', 'any', 'each', 'every', 'some', 'many', 'much', 'few', // Quantifiers
+        'first', 'second', 'third', 'last', 'next', 'previous', // Ordinal words
+        'good', 'bad', 'big', 'small', 'high', 'low', 'new', 'old', // Common adjectives
+        'one', 'two', 'three', 'first', 'second', 'third', // Numbers as words
+      ];
+      
+      if (commonFalsePositives.includes(text.toLowerCase())) {
+        console.log(`Common false positive word detected: "${text}"`);
+        return true;
+      }
+      
+      // Check for common OCR artifacts that look like spelling errors
+      const ocrArtifacts = [
+        /^[a-z]{1,2}$/i,  // Very short words (1-2 characters)
+        /^[a-z]+[0-9]$/i, // Words ending with numbers
+        /^[0-9][a-z]+$/i, // Numbers followed by letters
+        /^[a-z]+[^a-zA-Z0-9\s]$/i, // Words ending with symbols
+        /^[^a-zA-Z0-9\s][a-z]+$/i, // Words starting with symbols
+      ];
+      
+      for (const pattern of ocrArtifacts) {
+        if (pattern.test(text)) {
+          console.log(`OCR artifact pattern detected: "${text}" matches ${pattern}`);
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  // Helper method to determine if vision analysis should be used
+  shouldUseVisionAnalysis(processedData) {
+    if (!processedData.ocrConfidence) return false;
+    
+    // Use vision analysis if OCR confidence is below 70% or text is too short
+    const lowConfidence = processedData.ocrConfidence < 70;
+    const shortText = (processedData.extractedText || '').trim().length < 100;
+    
+    console.log(`OCR Confidence: ${processedData.ocrConfidence}%, Text length: ${(processedData.extractedText || '').length}`);
+    console.log(`Low confidence: ${lowConfidence}, Short text: ${shortText}`);
+    
+    return lowConfidence || shortText;
+  }
+
+  // New method to review single image with vision analysis
+  async reviewSingleImageWithVision(processedData, targetLanguage, reviewCategories) {
+    console.log('Analyzing single image with GPT-4o vision...');
+    
+    try {
+      // Prepare the image for vision analysis
+      const imageUrl = `data:image/${processedData.metadata.format};base64,${processedData.data}`;
+      
+      const messages = [
+        {
+          role: 'system',
+          content: this.getVisionSystemPrompt('en')
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Please analyze this image from a Petlibro product documentation. Review for spelling, grammar, terminology consistency, brand accuracy, and overall quality. Focus on: ${reviewCategories.join(', ')}`
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: imageUrl,
+                detail: 'high'
+              }
+            }
+          ]
+        }
+      ];
+
+      console.log('Sending image to GPT-4o for vision analysis...');
+      console.log('Using model:', config.OPENAI_MODEL);
+      
+      const response = await this.openai.chat.completions.create({
+        model: config.OPENAI_MODEL,
+        messages: messages,
+        temperature: 0.3,
+        max_tokens: 4000
+      });
+
+      // Debug logging
+      console.log('Vision Analysis Response:', {
+        model: response.model,
+        usage: response.usage,
+        finish_reason: response.choices[0].finish_reason
+      });
+      console.log('Raw Vision Response:');
+      console.log(response.choices[0].message.content);
+      console.log('--- End of Vision Response ---');
+
+      const reviewResult = this.parseAIResponse(response.choices[0].message.content);
+      
+      // Filter out false positives for single image vision analysis
+      if (reviewResult.issues) {
+        // For vision analysis, we can't easily validate against text content
+        // but we can still filter out obvious false positives
+        const originalIssueCount = reviewResult.issues.length;
+        console.log(`\n=== Vision Analysis Result Validation ===`);
+        console.log(`Original issues count: ${originalIssueCount}`);
+        
+        reviewResult.issues = reviewResult.issues.filter(issue => {
+          // Apply false positive detection
+          const isFalsePositive = this.isFalsePositive(issue.original_text, issue.type);
+          if (isFalsePositive) {
+            console.log(`Filtering out single image vision analysis false positive: "${issue.original_text}"`);
+            return false;
+          }
+          
+          // Require reasonable confidence for vision analysis
+          return (issue.confidence || 0) >= 75;
+        });
+        
+        const filteredIssueCount = reviewResult.issues.length;
+        const filteredCount = originalIssueCount - filteredIssueCount;
+        console.log(`Filtered issues count: ${filteredIssueCount}`);
+        console.log(`Issues filtered out: ${filteredCount}`);
+        console.log(`=== End Vision Analysis Result Validation ===\n`);
+      }
+      
+      return {
+        issues: reviewResult.issues || [],
+        review_summary: this.generateSummary(reviewResult.issues),
+        recommendations: reviewResult.recommendations || [],
+        overall_quality_score: reviewResult.overall_quality_score || 0,
+        metadata: {
+          reviewedAt: new Date().toISOString(),
+          language: targetLanguage,
+          categories: reviewCategories,
+          analysisType: 'vision',
+          originalOcrConfidence: processedData.ocrConfidence,
+          analysisLanguage: 'en'
+        }
+      };
+    } catch (error) {
+      console.error('Vision analysis error:', error);
+      throw error;
+    }
+  }
+
+  // Add a new method to fix known patterns
+  fixKnownPatterns(text) {
+    if (!text) return text;
+
+    let processed = text;
+
+    // Fix common OCR mistakes
+    processed = processed
+      // Fix "SAFETY INSTRUCTIONS" variations
+      .replace(/和\s*\\\s*a\s*SR\s*2\s*、\s*SAFETY\s*ONS/gi, 'SAFETY INSTRUCTIONS')
+      .replace(/SAFETY\s*[A-Z]*\s*ONS/gi, 'SAFETY INSTRUCTIONS')
+      .replace(/SAFETY\s*[A-Z]*\s*IONS/gi, 'SAFETY INSTRUCTIONS')
+      // Fix temperature patterns
+      .replace(/(\d+)\s*[°º]\s*([CF])\s*or\s*above\s*(\d+)\s*[°º]\s*([CF])/gi, '$1°$2 or above $3°$4')
+      // Fix bullet points
+      .replace(/^\s*[-*+]\s/, '• ')
+      // Fix common spacing issues
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return processed;
   }
 }
 
