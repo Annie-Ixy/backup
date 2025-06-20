@@ -109,6 +109,30 @@ router.post('/api/design-review/process', async (req, res) => {
     for (const fileId of fileIds) {
       const filePath = path.join(designReviewConfig.UPLOAD_DIR, fileId);
       try {
+        // 检查文件是否存在
+        const fileExists = await fs.pathExists(filePath);
+        if (!fileExists) {
+          console.error(`File not found: ${filePath}`);
+          results.push({
+            fileId,
+            success: false,
+            error: `File not found: ${fileId}`
+          });
+          continue;
+        }
+
+        // 检查文件是否为文件（不是目录）
+        const fileStat = await fs.stat(filePath);
+        if (!fileStat.isFile()) {
+          console.error(`Path is not a file: ${filePath}`);
+          results.push({
+            fileId,
+            success: false,
+            error: `Path is not a file: ${fileId}`
+          });
+          continue;
+        }
+
         const processedData = await fileProcessor.processFile(filePath);
         const reviewResult = await aiReviewer.reviewContent(
           processedData,

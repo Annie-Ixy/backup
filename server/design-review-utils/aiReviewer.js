@@ -4,13 +4,23 @@ const sharp = require('sharp');
 const fs = require('fs').promises;
 const path = require('path');
 const Tesseract = require('tesseract.js');
+// 本地代理，用于解决OpenAI API连接问题
+// const { HttpsProxyAgent } = require('https-proxy-agent');
+// const proxyAgent = new HttpsProxyAgent('http://127.0.0.1:7890');
 
 class AIReviewer {
   constructor() {
     if (process.env.OPENAI_API_KEY) {
       this.openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
-        timeout: 10 * 60 * 1000  // 5分钟超时
+        timeout: 30 * 1000,  // 30秒连接超时
+        maxRetries: 3,       // 最大重试次数
+        // httpAgent: proxyAgent,
+        httpAgent: new (require('https').Agent)({
+          keepAlive: true,
+          timeout: 30 * 1000,
+          maxSockets: 10
+        })
       });
     }
   }
@@ -96,6 +106,8 @@ class AIReviewer {
         console.log(`\n=== AI Result Validation ===`);
         console.log(`Original issues count: ${originalIssueCount}`);
         
+        // Temporarily disable filtering to see the raw AI output
+        /*
         reviewResult.issues = reviewResult.issues.filter(issue => {
           // First apply OCR-specific validation if applicable
           const ocrValid = this.validateOCRResult(issue);
@@ -113,11 +125,12 @@ class AIReviewer {
           
           return true;
         });
+        */
         
         const filteredIssueCount = reviewResult.issues.length;
         const filteredCount = originalIssueCount - filteredIssueCount;
         console.log(`Filtered issues count: ${filteredIssueCount}`);
-        console.log(`Issues filtered out: ${filteredCount}`);
+        console.log(`Issues filtered out: ${filteredCount} (FILTERING DISABLED)`);
         console.log(`=== End AI Result Validation ===\n`);
       }
       
@@ -218,7 +231,7 @@ CRITICAL REQUIREMENTS:
 - ONLY report issues that actually exist in the provided content
 - DO NOT generate or invent spelling errors that are not present in the text
 - DO NOT report common words like "the", "and", "is", "are" as spelling errors
-- DO NOT report partial words or OCR artifacts as spelling errors
+- Be cautious about reporting partial words or OCR artifacts. However, if a word seems like a clear misspelling of a common English word (e.g., 'Pres' instead of 'Press'), you should report it.
 - Verify that each reported issue actually appears in the original content before reporting it
 - If you're unsure about a potential issue, do not report it
 
@@ -443,7 +456,7 @@ CRITICAL REQUIREMENTS:
 - ONLY report issues that actually exist in the provided images
 - DO NOT generate or invent spelling errors that are not visible in the text
 - DO NOT report common words like "the", "and", "is", "are" as spelling errors
-- DO NOT report partial words or OCR artifacts as spelling errors
+- Be cautious about reporting partial words or OCR artifacts. However, if a word seems like a clear and obvious misspelling of a common English word (e.g., 'Pres' instead of 'Press', 'wid' instead of 'with'), you MUST report it.
 - Verify that each reported issue actually appears in the image before reporting it
 - If you're unsure about a potential issue, do not report it
 
@@ -511,100 +524,6 @@ Return your response in JSON format with the following structure:
     return summary;
   }
 
-  // 添加模拟审核功能
-  generateSimulatedReview(processedData, targetLanguage = 'zh-CN', reviewCategories = ['basic', 'advanced']) {
-    console.log('Generating simulated design review in English...');
-    
-    const content = this.extractContentForReview(processedData);
-    const contentLength = typeof content === 'string' ? content.length : 0;
-    
-    // 基于内容生成模拟问题
-    const simulatedIssues = [];
-    
-    // 基本检查问题
-    if (reviewCategories.includes('basic')) {
-      if (contentLength > 100) {
-        simulatedIssues.push({
-          type: 'spelling',
-          severity: 'low',
-          location: 'Page 1, document title area',
-          original_text: 'Sample text',
-          suggested_fix: 'Corrected text',
-          explanation: 'Simulated spelling issue found',
-          confidence: 0.8,
-          category: 'basic'
-        });
-      }
-      
-      simulatedIssues.push({
-        type: 'formatting',
-        severity: 'medium',
-        location: 'Page 1, overall layout formatting',
-        original_text: 'Inconsistent formatting',
-        suggested_fix: 'Unified formatting standards',
-        explanation: 'Recommend maintaining formatting consistency',
-        confidence: 0.7,
-        category: 'basic'
-      });
-    }
-    
-    // 高级检查问题
-    if (reviewCategories.includes('advanced')) {
-      simulatedIssues.push({
-        type: 'brand',
-        severity: 'high',
-        location: 'Page 1, header brand logo area',
-        original_text: 'Petlibro',
-        suggested_fix: 'Petlibro',
-        explanation: 'Brand name usage is correct',
-        confidence: 0.9,
-        category: 'advanced'
-      });
-      
-      if (contentLength > 200) {
-        simulatedIssues.push({
-          type: 'consistency',
-          severity: 'medium',
-          location: 'Page 2, product description paragraph',
-          original_text: 'Inconsistent terminology',
-          suggested_fix: 'Unified terminology standards',
-          explanation: 'Recommend maintaining terminology consistency throughout the document',
-          confidence: 0.8,
-          category: 'advanced'
-        });
-      }
-    }
-    
-    // 计算质量分数
-    const baseScore = 85;
-    const deduction = simulatedIssues.length * 5;
-    const qualityScore = Math.max(60, baseScore - deduction);
-    
-    const recommendations = [
-      'Recommend unified document formatting standards',
-      'Maintain consistency in brand name usage',
-      'Regularly check for spelling and grammar errors'
-    ];
-    
-    if (contentLength === 0) {
-      recommendations.push('Document content is empty, recommend adding relevant content');
-    }
-    
-    return {
-      issues: simulatedIssues,
-      review_summary: this.generateSummary(simulatedIssues),
-      recommendations: recommendations,
-      overall_quality_score: qualityScore,
-      metadata: {
-        reviewedAt: new Date().toISOString(),
-        language: targetLanguage,
-        categories: reviewCategories,
-        mode: 'simulation',
-        analysisLanguage: 'en' // Indicate that analysis was done in English
-      }
-    };
-  }
-
   async performOCR(imagePath) {
     let preprocessedPath = null;
     try {
@@ -649,14 +568,16 @@ Return your response in JSON format with the following structure:
       });
 
       console.log('Original OCR text:', result.data.text);
+      console.log('OCR confidence:', result.data.confidence);
+      console.log('Number of words detected:', result.data.words.length);
       
-      // 3. Process the OCR result
+      // 3. Process the OCR result with better debugging
       let processedText = await this.processOCRResult(result.data);
+      console.log('After processOCRResult:', processedText);
       
       // 4. Apply bullet point fixes
       processedText = this.fixBulletPoints(processedText);
-      
-      console.log('Processed OCR text:', processedText);
+      console.log('After fixBulletPoints:', processedText);
 
       // 5. Delete temporary file
       await fs.unlink(preprocessedPath).catch(err => {
@@ -810,20 +731,27 @@ Return your response in JSON format with the following structure:
   processContentLine(line) {
     if (!line) return line;
     
+    console.log('processContentLine input:', line);
+    
     // First clean up obvious garbage and artifacts
     let processed = this.removeGarbage(line);
+    console.log('After removeGarbage:', processed);
     
     // Then clean up OCR artifacts
     processed = this.cleanOCRText(processed);
+    console.log('After cleanOCRText:', processed);
     
     // Fix temperature expressions
     processed = this.fixTemperatureFormat(processed);
+    console.log('After fixTemperatureFormat:', processed);
     
     // Fix known patterns
     processed = this.fixKnownPatterns(processed);
+    console.log('After fixKnownPatterns:', processed);
     
     // Final normalization
     processed = this.normalizeTextFormatting(processed);
+    console.log('processContentLine output:', processed);
     
     return processed;
   }
@@ -866,20 +794,24 @@ Return your response in JSON format with the following structure:
   removeGarbage(text) {
     if (!text) return text;
 
+    console.log('removeGarbage input:', text);
+
     // Remove common garbage patterns
     let cleaned = text
       // Remove "和 a SR 2 、 SAFETY ONS" pattern
       .replace(/和\s*a\s*SR\s*2\s*、\s*SAFETY\s*ONS/g, '')
       // Remove "«" and "»" symbols
       .replace(/[«»]/g, '')
-      // Remove Chinese characters
-      .replace(/[一-龥]/g, '')
+      // More conservative: only remove specific problematic Chinese characters, not all
+      .replace(/[和\s*\\\s*a\s*SR\s*2\s*、\s*SAFETY\s*ONS]/g, '')
       // Remove vertical bars and plus signs at the end
       .replace(/\s*\|\s*\+\s*$/, '')
       // Remove multiple spaces
       .replace(/\s+/g, ' ')
       // Trim the result
       .trim();
+
+    console.log('removeGarbage output:', cleaned);
 
     return cleaned;
   }
@@ -911,6 +843,8 @@ Return your response in JSON format with the following structure:
   cleanOCRText(text) {
     if (!text) return text;
     
+    console.log('cleanOCRText input:', text);
+    
     let cleaned = text;
     
     // Basic character replacements
@@ -935,11 +869,18 @@ Return your response in JSON format with the following structure:
       cleaned = cleaned.replace(new RegExp(char, 'g'), replacement);
     });
     
-    // Remove any remaining non-standard characters
-    cleaned = cleaned.replace(/[^\x20-\x7E°]/g, ' ');
+    console.log('After character replacements:', cleaned);
+    
+    // More conservative character filtering - only remove truly problematic characters
+    // Keep more valid characters including degree symbols, bullet points, etc.
+    cleaned = cleaned.replace(/[^\x20-\x7E°•]/g, ' ');
+    
+    console.log('After character filtering:', cleaned);
     
     // Normalize spaces
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    console.log('cleanOCRText output:', cleaned);
     
     return cleaned;
   }
@@ -1029,7 +970,7 @@ Return your response in JSON format with the following structure:
       }
       
       // For spelling issues, require higher confidence and existence in content
-      const isValid = existsInContent && (issue.confidence || 0) >= 85;
+      const isValid = existsInContent && (issue.confidence || 0) >= 75; // Lowered threshold from 85 to 75
       if (!isValid) {
         console.log(`Filtering out spelling issue: "${originalText}" - exists: ${existsInContent}, confidence: ${issue.confidence}`);
       }
@@ -1047,23 +988,25 @@ Return your response in JSON format with the following structure:
   // Helper method to identify common false positives
   isFalsePositive(text, issueType) {
     if (!text) return false;
+
+    const lowerCaseText = text.toLowerCase();
     
     // Common false positive patterns
     const falsePositivePatterns = [
       // Common OCR artifacts that look like spelling errors
-      /^[a-z]{1,3}$/i,  // Very short words (1-3 characters)
-      /^[0-9]+$/,       // Pure numbers
-      /^[^a-zA-Z0-9\s]+$/, // Pure symbols
-      /^[a-z]+[0-9]+$/i,   // Words with numbers (like OCR artifacts)
-      /^[0-9]+[a-z]+$/i,   // Numbers with letters
-      /^[a-z]+[^a-zA-Z0-9\s]+$/i, // Words with symbols
-      /^[^a-zA-Z0-9\s]+[a-z]+$/i, // Symbols with words
+      { pattern: /^[a-z]{1,3}$/i, reason: 'Very short word (1-3 chars)' },
+      { pattern: /^[0-9]+$/, reason: 'Pure number' },
+      { pattern: /^[^a-zA-Z0-9\s]+$/, reason: 'Pure symbols' },
+      { pattern: /^[a-z]+[0-9]+$/i, reason: 'Word with trailing number' },
+      { pattern: /^[0-9]+[a-z]+$/i, reason: 'Number with trailing word' },
+      { pattern: /^[a-z]+[^a-zA-Z0-9\s]+$/i, reason: 'Word with trailing symbol' },
+      { pattern: /^[^a-zA-Z0-9\s]+[a-z]+$/i, reason: 'Symbol with trailing word' },
     ];
     
     // Check against patterns
-    for (const pattern of falsePositivePatterns) {
+    for (const { pattern, reason } of falsePositivePatterns) {
       if (pattern.test(text)) {
-        console.log(`Pattern match for false positive: "${text}" matches ${pattern}`);
+        console.log(`Filtering as false positive: "${text}" (Reason: ${reason})`);
         return true;
       }
     }
@@ -1071,43 +1014,33 @@ Return your response in JSON format with the following structure:
     // Specific false positive words for spelling issues
     if (issueType === 'spelling') {
       const commonFalsePositives = [
-        'teh', 'teh', 'teh', // Common OCR artifact for "the"
-        'th', 'th', 'th',    // Partial words
-        'a', 'an', 'the',    // Articles that might be flagged
-        'is', 'are', 'was', 'were', // Common verbs
-        'in', 'on', 'at', 'to', 'for', // Prepositions
-        'and', 'or', 'but', 'if', 'of', // Conjunctions and common words
-        'it', 'its', 'it\'s', // Common pronouns
-        'he', 'she', 'they', 'we', 'you', // Pronouns
-        'this', 'that', 'these', 'those', // Demonstratives
-        'have', 'has', 'had', 'do', 'does', 'did', // Auxiliary verbs
-        'can', 'will', 'would', 'could', 'should', 'may', 'might', // Modal verbs
-        'not', 'no', 'yes', 'yes', // Negatives and affirmatives
-        'up', 'down', 'out', 'off', 'over', 'under', // Directional words
-        'here', 'there', 'where', 'when', 'why', 'how', // Question words
-        'all', 'any', 'each', 'every', 'some', 'many', 'much', 'few', // Quantifiers
-        'first', 'second', 'third', 'last', 'next', 'previous', // Ordinal words
-        'good', 'bad', 'big', 'small', 'high', 'low', 'new', 'old', // Common adjectives
-        'one', 'two', 'three', 'first', 'second', 'third', // Numbers as words
+        'teh', 'th', 'a', 'an', 'is', 'are', 'was', 'were', 'in', 'on', 'at', 'to', 'for', 'and', 
+        'or', 'but', 'if', 'of', 'it', 'its', "it's", 'he', 'she', 'they', 'we', 'you', 'this', 
+        'that', 'these', 'those', 'have', 'has', 'had', 'do', 'does', 'did', 'can', 'will', 
+        'would', 'could', 'should', 'may', 'might', 'not', 'no', 'yes', 'up', 'down', 'out', 
+        'off', 'over', 'under', 'here', 'there', 'where', 'when', 'why', 'how', 'all', 'any', 
+        'each', 'every', 'some', 'many', 'much', 'few', 'first', 'second', 'third', 'last', 
+        'next', 'previous', 'good', 'bad', 'big', 'small', 'high', 'low', 'new', 'old', 
+        'one', 'two', 'three'
       ];
       
-      if (commonFalsePositives.includes(text.toLowerCase())) {
-        console.log(`Common false positive word detected: "${text}"`);
+      if (commonFalsePositives.includes(lowerCaseText)) {
+        console.log(`Filtering as false positive: "${text}" (Reason: Common word list)`);
         return true;
       }
       
       // Check for common OCR artifacts that look like spelling errors
       const ocrArtifacts = [
-        /^[a-z]{1,2}$/i,  // Very short words (1-2 characters)
-        /^[a-z]+[0-9]$/i, // Words ending with numbers
-        /^[0-9][a-z]+$/i, // Numbers followed by letters
-        /^[a-z]+[^a-zA-Z0-9\s]$/i, // Words ending with symbols
-        /^[^a-zA-Z0-9\s][a-z]+$/i, // Words starting with symbols
+        { pattern: /^[a-z]{1,2}$/i, reason: 'Very short word (1-2 chars)' },
+        { pattern: /^[a-z]+[0-9]$/i, reason: 'Word ending with number' },
+        { pattern: /^[0-9][a-z]+$/i, reason: 'Number followed by letters' },
+        { pattern: /^[a-z]+[^a-zA-Z0-9\s]$/i, reason: 'Word ending with symbol' },
+        { pattern: /^[^a-zA-Z0-9\s][a-z]+$/i, reason: 'Word starting with symbol' },
       ];
       
-      for (const pattern of ocrArtifacts) {
+      for (const { pattern, reason } of ocrArtifacts) {
         if (pattern.test(text)) {
-          console.log(`OCR artifact pattern detected: "${text}" matches ${pattern}`);
+          console.log(`Filtering as false positive: "${text}" (Reason: OCR artifact pattern - ${reason})`);
           return true;
         }
       }
@@ -1118,16 +1051,26 @@ Return your response in JSON format with the following structure:
 
   // Helper method to determine if vision analysis should be used
   shouldUseVisionAnalysis(processedData) {
-    if (!processedData.ocrConfidence) return false;
+    // Check if OCR confidence is available
+    if (processedData.ocrConfidence !== undefined) {
+      // Use vision analysis if OCR confidence is below 70% or text is too short
+      const lowConfidence = processedData.ocrConfidence < 70;
+      const shortText = (processedData.extractedText || '').trim().length < 100;
+      
+      console.log(`OCR Confidence: ${processedData.ocrConfidence}%, Text length: ${(processedData.extractedText || '').length}`);
+      console.log(`Low confidence: ${lowConfidence}, Short text: ${shortText}`);
+      
+      return lowConfidence || shortText;
+    }
     
-    // Use vision analysis if OCR confidence is below 70% or text is too short
-    const lowConfidence = processedData.ocrConfidence < 70;
-    const shortText = (processedData.extractedText || '').trim().length < 100;
+    // If no OCR confidence data, check if extracted text is empty or very short
+    const extractedText = processedData.extractedText || '';
+    const isEmptyOrShort = extractedText.trim().length === 0 || extractedText.trim().length < 50;
     
-    console.log(`OCR Confidence: ${processedData.ocrConfidence}%, Text length: ${(processedData.extractedText || '').length}`);
-    console.log(`Low confidence: ${lowConfidence}, Short text: ${shortText}`);
+    console.log(`No OCR confidence data. Extracted text length: ${extractedText.length}`);
+    console.log(`Empty or short text: ${isEmptyOrShort}`);
     
-    return lowConfidence || shortText;
+    return isEmptyOrShort;
   }
 
   // New method to review single image with vision analysis
@@ -1191,6 +1134,8 @@ Return your response in JSON format with the following structure:
         console.log(`\n=== Vision Analysis Result Validation ===`);
         console.log(`Original issues count: ${originalIssueCount}`);
         
+        // Temporarily disable filtering to see the raw AI output
+        /*
         reviewResult.issues = reviewResult.issues.filter(issue => {
           // Apply false positive detection
           const isFalsePositive = this.isFalsePositive(issue.original_text, issue.type);
@@ -1202,11 +1147,12 @@ Return your response in JSON format with the following structure:
           // Require reasonable confidence for vision analysis
           return (issue.confidence || 0) >= 75;
         });
+        */
         
         const filteredIssueCount = reviewResult.issues.length;
         const filteredCount = originalIssueCount - filteredIssueCount;
         console.log(`Filtered issues count: ${filteredIssueCount}`);
-        console.log(`Issues filtered out: ${filteredCount}`);
+        console.log(`Issues filtered out: ${filteredCount} (FILTERING DISABLED)`);
         console.log(`=== End Vision Analysis Result Validation ===\n`);
       }
       
@@ -1251,6 +1197,65 @@ Return your response in JSON format with the following structure:
       .trim();
 
     return processed;
+  }
+
+  // 测试 OpenAI 连接
+  async testOpenAIConnection() {
+    if (!this.openai) {
+      console.error('OpenAI client not initialized - API key missing');
+      return { success: false, error: 'API key not configured' };
+    }
+
+    try {
+      console.log('Testing OpenAI connection...');
+      console.log('API Key:', process.env.OPENAI_API_KEY ? 'Configured' : 'Missing');
+      console.log('Model:', config.OPENAI_MODEL);
+      
+      const response = await this.openai.chat.completions.create({
+        model: config.OPENAI_MODEL,
+        messages: [
+          {
+            role: 'user',
+            content: 'Hello, this is a connection test. Please respond with "Connection successful" if you can see this message.'
+          }
+        ],
+        max_tokens: 10,
+        temperature: 0
+      });
+
+      console.log('OpenAI connection test successful!');
+      console.log('Response:', response.choices[0].message.content);
+      
+      return { 
+        success: true, 
+        response: response.choices[0].message.content,
+        model: response.model,
+        usage: response.usage
+      };
+    } catch (error) {
+      console.error('OpenAI connection test failed:', error);
+      
+      // 详细错误信息
+      const errorDetails = {
+        success: false,
+        error: error.message,
+        type: error.constructor.name,
+        code: error.code,
+        status: error.status
+      };
+
+      if (error.code === 'ETIMEDOUT') {
+        errorDetails.suggestion = '网络连接超时，请检查网络连接或稍后重试';
+      } else if (error.status === 401) {
+        errorDetails.suggestion = 'API 密钥无效，请检查 OPENAI_API_KEY 环境变量';
+      } else if (error.status === 429) {
+        errorDetails.suggestion = 'API 请求频率过高，请稍后重试';
+      } else if (error.status >= 500) {
+        errorDetails.suggestion = 'OpenAI 服务器错误，请稍后重试';
+      }
+
+      return errorDetails;
+    }
   }
 }
 

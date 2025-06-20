@@ -1,4 +1,4 @@
-const fs = require('fs').promises;
+const fs = require('fs-extra');
 const path = require('path');
 const pdfParse = require('pdf-parse');
 const PDFParser = require('pdf2json');
@@ -23,12 +23,29 @@ class FileProcessor {
     console.log(`Processing file: ${fileName} (${ext})`);
 
     try {
+      // 检查文件是否存在
+      const fileExists = await fs.pathExists(filePath);
+      if (!fileExists) {
+        throw new Error(`File does not exist: ${filePath}`);
+      }
+
+      // 检查文件是否为文件（不是目录）
+      const fileStat = await fs.stat(filePath);
+      if (!fileStat.isFile()) {
+        throw new Error(`Path is not a file: ${filePath}`);
+      }
+
+      // 检查文件扩展名
+      if (!ext) {
+        throw new Error(`File has no extension: ${fileName}`);
+      }
+
       if (this.supportedFormats.documents.includes(ext)) {
         return await this.processDocument(filePath, ext);
       } else if (this.supportedFormats.images.includes(ext)) {
         return await this.processImage(filePath);
       } else {
-        throw new Error(`Unsupported file format: ${ext}`);
+        throw new Error(`Unsupported file format: ${ext}. Supported formats: ${[...this.supportedFormats.documents, ...this.supportedFormats.images].join(', ')}`);
       }
     } catch (error) {
       console.error(`Error processing file ${fileName}:`, error);
