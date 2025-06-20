@@ -13,8 +13,10 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // 路由挂载
 const resumeRoutes = require('./resume/resumeRoutes');
 const designReviewRoutes = require('./designreview/designReviewRoutes');
+const questionnaireRoutes = require('./questionnaire/questionnaireRoutes');
 app.use('/', resumeRoutes);
 app.use('/', designReviewRoutes);
+app.use('/', questionnaireRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

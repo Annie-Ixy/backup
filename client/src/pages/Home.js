@@ -13,7 +13,8 @@ import {
   Brain,
   Zap,
   Palette,
-  TrendingUp
+  TrendingUp,
+  ClipboardList
 } from 'lucide-react';
 import { isLogin } from '../utils/index.ts';
 
@@ -72,6 +73,10 @@ import { isLogin } from '../utils/index.ts';
       navigate('/home');
     };
 
+    const handleGoToQuestionnaireAnalysis = () => {
+      navigate('/questionnaire-analysis');
+    };
+
     // AI工具模块配置
     const aiTools = [
       {
@@ -95,6 +100,16 @@ import { isLogin } from '../utils/index.ts';
         available: true
       },
       {
+        id: 'questionnaire-analysis',
+        title: '问卷文本分析',
+        description: '智能分析问卷文本数据，提取关键信息，生成深度洞察报告',
+        icon: ClipboardList,
+        color: 'bg-green-600',
+        hoverColor: 'hover:bg-green-700',
+        action: handleGoToQuestionnaireAnalysis,
+        available: true
+      },
+      {
         id: 'competitor-analysis',
         title: '竞品分析',
         description: '智能分析竞争对手产品特性、市场策略和用户反馈，生成专业竞品分析报告',
@@ -102,16 +117,6 @@ import { isLogin } from '../utils/index.ts';
         color: 'bg-green-600',
         hoverColor: 'hover:bg-green-700',
         action: () => navigate('/competitor-analysis'),
-        available: false
-      },
-      {
-        id: 'chat',
-        title: 'AI对话助手',
-        description: '智能聊天机器人，帮助您解答问题和提供专业建议',
-        icon: MessageSquare,
-        color: 'bg-green-600',
-        hoverColor: 'hover:bg-green-700',
-        action: () => navigate('/chat'),
         available: false
       },
       {

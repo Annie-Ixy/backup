@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Home from './pages/Home';
 import Resume from './pages/Resume';
 import DesignReview from './pages/DesignReview';
+import QuestionnaireAnalysis from './pages/QuestionnaireAnalysis';
 import ProtectedRoute from './components/ProtectedRoute';
 import { isLogin } from './utils/index.ts';
 
@@ -73,6 +74,15 @@ function App() {
           element={
             <ProtectedRoute>
               <DesignReview />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/questionnaire-analysis" 
+          element={
+            <ProtectedRoute>
+              <QuestionnaireAnalysis />
             </ProtectedRoute>
           } 
         />
