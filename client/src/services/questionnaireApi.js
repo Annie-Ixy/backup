@@ -1,4 +1,4 @@
-import api from '../utils/request';
+import { api } from '../utils/request';
 
 export const questionnaireApi = {
   // 上传问卷数据
