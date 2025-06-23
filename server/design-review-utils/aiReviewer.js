@@ -1,27 +1,14 @@
-const OpenAI = require('openai');
+const { createOpenAIInstance } = require('../utils/openaiConfig');
 const config = require('../design-review-config');
 const sharp = require('sharp');
 const fs = require('fs').promises;
 const path = require('path');
 const Tesseract = require('tesseract.js');
-// 本地代理，用于解决OpenAI API连接问题
-const { HttpsProxyAgent } = require('https-proxy-agent');
-const proxyAgent = new HttpsProxyAgent('http://127.0.0.1:7890');
 
 class AIReviewer {
   constructor() {
     if (process.env.OPENAI_API_KEY) {
-      this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-        timeout: 30 * 1000,  // 30秒连接超时
-        maxRetries: 3,       // 最大重试次数
-        httpAgent: proxyAgent,
-        // httpAgent: new (require('https').Agent)({
-        //   keepAlive: true,
-        //   timeout: 30 * 1000,
-        //   maxSockets: 10
-        // })
-      });
+      this.openai = createOpenAIInstance();
     }
   }
 

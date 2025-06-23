@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const pdfParse = require('pdf-parse');
 const yauzl = require('yauzl');
 const iconv = require('iconv-lite');
-const { OpenAI } = require('openai');
+const { createOpenAIInstance } = require('../utils/openaiConfig');
 
 const router = express.Router();
 
@@ -163,10 +163,8 @@ const upload = multer({
   }
 });
 
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Initialize OpenAI - 使用公共方法
+const openai = createOpenAIInstance();
 
 // Store processed candidates in memory (in production, use a database)
 let candidatesCache = new Map();

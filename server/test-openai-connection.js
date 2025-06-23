@@ -1,5 +1,5 @@
 require('dotenv').config();
-const OpenAI = require('openai');
+const { createOpenAIInstance, getProxyStatus } = require('./utils/openaiConfig');
 
 async function testOpenAIConnection() {
   console.log('=== OpenAI Connection Test ===');
@@ -12,11 +12,12 @@ async function testOpenAIConnection() {
   console.log('✅ API Key found');
   console.log('Model:', process.env.OPENAI_MODEL || 'gpt-4o');
   
+  // 显示代理状态
+  const proxyStatus = getProxyStatus();
+  console.log('🔧 Proxy Status:', proxyStatus);
+  
   try {
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      timeout: 60000 // 60 seconds timeout
-    });
+    const openai = createOpenAIInstance();
     
     console.log('🔄 Testing OpenAI API connection...');
     

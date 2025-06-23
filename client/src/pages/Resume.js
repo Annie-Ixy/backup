@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import FileUpload from '../components/FileUpload';
 import CandidateRanking from '../components/CandidateRanking';
 import LoadingScreen from '../components/LoadingScreen';
-import { Award, Upload, Users, TrendingUp, LogOut, User } from 'lucide-react';
+import { Award, Upload, Users, TrendingUp, LogOut, User, ArrowLeft } from 'lucide-react';
 import api from '../utils/request';
 import { isLogin } from '../utils/index.ts';
 
@@ -216,22 +216,30 @@ function Resume() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Custom Header for Resume Page */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16 to-home" 
-            style={{cursor: 'pointer'}}
-            onClick={handleGoToHome}>
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Award className="h-5 w-5 text-white" />
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleGoToHome}
+                className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                <span>返回首页</span>
+              </button>
+              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                <Award className="w-6 h-6 text-white" />
               </div>
-              <h1 className="text-xl font-bold text-gray-900">AI智能工具平台</h1>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">简历筛选 AI</h1>
+                <p className="text-sm text-gray-500">使用AI技术快速分析和排序候选人简历，找到最合适的人才</p>
+              </div>
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2 text-gray-700">
                 <User className="h-5 w-5" />
-                <span>{username}</span>
+                <span>欢迎，{username}</span>
               </div>
               <button
                 onClick={handleLogout}
