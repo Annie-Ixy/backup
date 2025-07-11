@@ -17,7 +17,7 @@ function createOpenAIConfig() {
                    process.env.NODE_ENV === 'development' ||
                    process.env.PROXY_ENABLED === 'true';
   
-  const proxyUrl = process.env.PROXY_URL || 'http://127.0.0.1:7890';
+  const proxyUrl = process.env.PROXY_URL || '';
 
   if (useProxy) {
     try {
@@ -52,7 +52,7 @@ function getProxyStatus() {
                    process.env.NODE_ENV === 'development' ||
                    process.env.PROXY_ENABLED === 'true';
   
-  const proxyUrl = process.env.PROXY_URL || 'http://127.0.0.1:7890';
+  const proxyUrl = process.env.PROXY_URL || 'http://127.0.0.1:33210';
   
   return {
     useProxy,

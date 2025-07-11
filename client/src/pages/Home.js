@@ -26,11 +26,11 @@ import { isLogin } from '../utils/index.ts';
     useEffect(() => {
       if (!isLoginChecked.current) {
         isLoginChecked.current = true;
-        isLogin().then(res => {
-          if (!res) {
-            navigate('/login');
-          }
-        })
+        // isLogin().then(res => {
+        //   if (!res) {
+        //     navigate('/login');
+        //   }
+        // })
       }
     }, [])
 

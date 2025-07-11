@@ -22,6 +22,7 @@ AI驱动的简历筛选和候选人排名系统，专为HRBP部门设计，能�
 
 ### 后端
 - **Node.js + Express**: 后端API服务
+- **Python3+**: 后端API服务 
 - **OpenAI GPT-4**: AI简历分析
 - **PDF-Parse**: PDF文件解析
 - **Yauzl**: ZIP文件处理
@@ -58,7 +59,7 @@ npm run install-all
 OPENAI_API_KEY=your_openai_api_key_here
 
 # 服务器配置
-PORT=5000
+PORT=9000
 NODE_ENV=development
 ```
 
