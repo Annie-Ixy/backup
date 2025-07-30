@@ -58,12 +58,37 @@ except ImportError as e:
     sys.exit(1)
 
 # 加载.env文件中的环境变量（可选）
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-    logger.info("✅ 成功加载环境变量")
-except ImportError:
-    logger.warning("⚠️ python-dotenv库未安装，将跳过环境变量加载")
+def load_env_variables():
+    """加载环境变量，支持多种方式"""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        logger.info("✅ 成功通过dotenv加载环境变量")
+        return True
+    except ImportError:
+        logger.warning("⚠️ python-dotenv库未安装，尝试手动加载.env文件")
+        
+        # 手动加载.env文件
+        env_file = Path(__file__).parent / '.env'
+        if env_file.exists():
+            try:
+                with open(env_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            os.environ[key.strip()] = value.strip()
+                logger.info("✅ 成功手动加载.env文件")
+                return True
+            except Exception as e:
+                logger.error(f"❌ 手动加载.env文件失败: {e}")
+        else:
+            logger.warning("⚠️ 未找到.env文件")
+        
+        return False
+
+# 加载环境变量
+load_env_variables()
 
 
 class QuestionnaireTranslationClassifier:
@@ -72,6 +97,10 @@ class QuestionnaireTranslationClassifier:
     def __init__(self):
         # 初始化问卷分析器
         self.analyzer = UniversalQuestionnaireAnalyzer()
+        
+        # 新增：参考标签相关属性
+        self.reference_tags = []
+        self.use_reference_mode = False
         
         # 检查OpenAI是否可用
         if not OPENAI_AVAILABLE:
@@ -123,8 +152,296 @@ class QuestionnaireTranslationClassifier:
             logger.info("✅ OpenAI客户端初始化成功")
         except Exception as e:
             logger.error(f"❌ OpenAI客户端初始化失败: {e}")
-            logger.warning("⚠️ OpenAI功能将被禁用")
-            self.client = None
+            logger.warning("⚠️ OpenAI功能将被禁用    city")
+            self.client = OpenAI(
+                api_key=os.getenv("OPENAI_API_KEY"),
+                base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+                http_client=http_client,
+                max_retries=5  # 添加客户端级别的重试
+            )
+            # self.client = None
+    
+    def set_reference_tags(self, reference_tags):
+        """
+        设置参考标签
+        Args:
+            reference_tags: 参考标签列表
+            [
+                {
+                    'name': '服务质量',
+                    'definition': '服务响应速度和效率相关问题',
+                    'examples': ['响应慢', '服务态度', '处理效率']
+                }
+            ]
+        """
+        self.reference_tags = reference_tags
+        self.use_reference_mode = True
+        logger.info(f"📋 已设置 {len(reference_tags)} 个参考标签")
+        for tag in reference_tags:
+            logger.info(f"  - {tag['name']}: {tag['definition']}")
+    
+    def assign_tags_based_on_reference(self, translated_texts, retry_count=0):
+        """
+        基于参考标签对翻译后的文本进行标签分配
+        
+        Args:
+            translated_texts: 已翻译的文本列表
+            retry_count: 重试次数
+        
+        Returns:
+            标签分配结果列表: ["标签1,标签2", "标签3", ...]
+        """
+        if not translated_texts or all(not text.strip() for text in translated_texts):
+            return [""] * len(translated_texts)
+        
+        if not self.reference_tags:
+            logger.warning("⚠️ 未设置参考标签，使用原有方法")
+            return self._rule_based_tag_assignment(translated_texts)
+        
+        if not self.client:
+            logger.warning("⚠️ OpenAI客户端不可用，使用规则匹配方法")
+            return self._rule_based_tag_assignment(translated_texts)
+        
+        # 构建参考标签信息
+        reference_info = self._build_reference_tags_prompt()
+        
+        # 构建批量文本
+        text_list = "\n".join([f"{idx+1}. {text}" for idx, text in enumerate(translated_texts) if text.strip()])
+        
+        prompt = f"""
+        请根据以下参考标签体系，为每个中文文本分配最合适的标签。
+        
+        参考标签体系：
+        {reference_info}
+        
+        打标要求：
+        1. 严格保持原文顺序和编号
+        2. 每行输出格式为"编号. 标签名称1,标签名称2,标签名称3"
+        3. 只能输出上述参考标签体系中的【标签名称】（冒号前面的部分），不要输出示例关键词
+        4. 每个文本分配1-3个最相关的标签名称
+        5. 如果文本与所有参考标签都不匹配，输出"其他"
+        6. 只输出标签分配结果，不要其他说明
+        
+        重要提醒：请输出标签名称（如"用户满意"），不要输出示例关键词（如"很满意"）！
+        
+        示例输出：
+        1. 用户满意,产品体验
+        2. 技术支持
+        3. 其他
+        
+        待分配标签的文本：
+        {text_list}
+        
+        标签分配结果：
+        """
+        
+        try:
+            model = os.getenv("OPENAI_MODEL")
+            if not model:
+                logger.error("未找到OPENAI_MODEL环境变量")
+                return self._rule_based_tag_assignment(translated_texts)
+            
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "你是专业的文本分类专家，严格按照给定的标签体系进行分类。"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=100 * len(translated_texts)
+            )
+            
+            # 解析结果
+            results = [""] * len(translated_texts)
+            content = response.choices[0].message.content
+            content = content.strip() if content else ""
+            
+            if content:
+                for line in content.split('\n'):
+                    match = re.match(r'(\d+)\.\s*(.+)', line)
+                    if match:
+                        idx = int(match.group(1)) - 1
+                        if idx < len(translated_texts):
+                            tags = match.group(2).strip()
+                            results[idx] = tags
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"❌ 基于参考标签的打标失败: {e}")
+            if retry_count < 3:
+                logger.warning(f"🔄 重试第 {retry_count + 1} 次...")
+                time.sleep(2 ** retry_count)
+                return self.assign_tags_based_on_reference(translated_texts, retry_count + 1)
+            else:
+                logger.warning("⚠️ 多次重试失败，使用规则匹配方法")
+                return self._rule_based_tag_assignment(translated_texts)
+    
+    def _build_reference_tags_prompt(self):
+        """
+        构建参考标签的提示信息
+        """
+        reference_info = ""
+        for i, tag in enumerate(self.reference_tags, 1):
+            reference_info += f"{i}. {tag['name']}: {tag['definition']}\n"
+            if tag.get('examples'):
+                examples = ', '.join(tag['examples'])
+                reference_info += f"   示例关键词: {examples}\n"
+        
+        return reference_info
+    
+    def _rule_based_tag_assignment(self, translated_texts):
+        """
+        基于规则的标签分配（当AI不可用时的回退方法）
+        """
+        results = []
+        
+        # 构建关键词映射
+        tag_keywords = {}
+        for tag in self.reference_tags:
+            keywords = [tag['name']] + tag.get('examples', [])
+            # 添加定义中的关键词
+            if tag.get('definition'):
+                definition_words = tag['definition'].split()
+                keywords.extend(definition_words)
+            tag_keywords[tag['name']] = keywords
+        
+        for text in translated_texts:
+            if not text.strip():
+                results.append("")
+                continue
+            
+            # 匹配得分
+            tag_scores = {}
+            for tag_name, keywords in tag_keywords.items():
+                score = 0
+                for keyword in keywords:
+                    if keyword in text:
+                        score += 1
+                tag_scores[tag_name] = score
+            
+            # 选择得分最高的标签名称
+            if tag_scores:
+                max_score = max(tag_scores.values())
+                if max_score > 0:
+                    matched_tags = [tag_name for tag_name, score in tag_scores.items() if score == max_score]
+                    results.append(",".join(matched_tags[:3]))  # 最多3个标签名称
+                else:
+                    results.append("其他")
+            else:
+                results.append("其他")
+        
+        return results
+    
+    def _need_translation(self, texts):
+        """
+        判断是否需要翻译（简单的中英文检测）
+        """
+        sample_text = ' '.join(texts[:5])  # 取前5个文本样本
+        chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', sample_text))
+        english_chars = len(re.findall(r'[a-zA-Z]', sample_text))
+        
+        # 如果英文字符比中文字符多，认为需要翻译
+        return english_chars > chinese_chars
+    
+    def _batch_translate_texts(self, texts, column_name, batch_size=50):
+        """
+        纯翻译功能，不涉及打标
+        """
+        translations = []
+        
+        batches = [texts[i:i+batch_size] for i in range(0, len(texts), batch_size)]
+        
+        for batch_idx, batch in enumerate(batches):
+            logger.info(f"🔄 翻译批次 {batch_idx + 1}/{len(batches)}")
+            batch_translations = self._translate_batch(batch, column_name)
+            translations.extend(batch_translations)
+            
+            # 批次间等待
+            if batch_idx < len(batches) - 1:
+                time.sleep(1.0)
+        
+        return translations
+    
+    def _translate_batch(self, texts, column_name):
+        """
+        批量翻译单个批次
+        """
+        text_list = "\n".join([f"{idx+1}. {text}" for idx, text in enumerate(texts) if text.strip()])
+        
+        prompt = f"""
+        请将以下英文内容翻译成中文，保持原文顺序和编号。
+        
+        要求：
+        1. 严格保持原文顺序和编号
+        2. 每行输出格式为"编号. 翻译内容"
+        3. 只输出翻译结果，不要其他说明
+        
+        {column_name}内容：
+        {text_list}
+        
+        翻译结果：
+        """
+        
+        try:
+            model = os.getenv("OPENAI_MODEL")
+            if not model:
+                logger.error("未找到OPENAI_MODEL环境变量")
+                return texts
+            
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "你是专业的翻译助手，专注于准确翻译。"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=100 * len(texts)
+            )
+            
+            # 解析翻译结果
+            results = [""] * len(texts)
+            content = response.choices[0].message.content
+            content = content.strip() if content else ""
+            
+            if content:
+                for line in content.split('\n'):
+                    match = re.match(r'(\d+)\.\s*(.+)', line)
+                    if match:
+                        idx = int(match.group(1)) - 1
+                        if idx < len(texts):
+                            translation = match.group(2).strip()
+                            results[idx] = translation
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"❌ 翻译失败: {e}")
+            return texts  # 翻译失败时返回原文
+    
+    def _assign_to_reference_topics(self, sub_tags_list, main_topics):
+        """
+        将标签分配到参考主题
+        """
+        topic_assignments = []
+        
+        for tags_str in sub_tags_list:
+            if not tags_str or tags_str.strip() == "其他":
+                topic_assignments.append("其他")
+                continue
+            
+            # 分割标签
+            tags = [tag.strip() for tag in tags_str.split(',') if tag.strip()]
+            
+            # 直接使用标签作为主题（因为标签就是从参考标签中选择的）
+            matched_topics = [tag for tag in tags if tag in main_topics]
+            
+            if matched_topics:
+                topic_assignments.append("、".join(matched_topics))
+            else:
+                topic_assignments.append("其他")
+        
+        return topic_assignments
     
     def find_column(self, df, keywords):
         """
@@ -149,6 +466,29 @@ class QuestionnaireTranslationClassifier:
             logger.warning("⚠️ OpenAI客户端不可用，返回原始文本")
             return [(text, "") for text in texts]
         
+        # 如果启用了参考标签模式，分别处理翻译和打标
+        if self.use_reference_mode and self.reference_tags:
+            logger.info("🏷️  使用参考标签模式进行分别处理")
+            
+            # 第一步：翻译
+            if self._need_translation(texts):
+                logger.info("📝 开始翻译...")
+                translations = self._batch_translate_texts(texts, column_name, batch_size)
+            else:
+                translations = texts  # 如果是中文，直接使用原文
+            
+            # 第二步：基于参考标签打标
+            logger.info("🏷️  基于参考标签打标...")
+            tags = self.assign_tags_based_on_reference(translations, retry_count)
+            
+            # 组合结果
+            results = []
+            for translation, tag in zip(translations, tags):
+                results.append((translation, tag))
+            
+            return results
+        
+        # 原有的一体化处理逻辑
         # 构建批量提示
         text_list = "\n".join([f"{idx+1}. {text}" for idx, text in enumerate(texts) if text.strip()])
         
@@ -768,15 +1108,24 @@ class QuestionnaireTranslationClassifier:
                 continue
             
             # 生成一级主题
-            num_topics = min(5, len(unique_tags))  # 根据标签数量动态调整主题数
-            main_topics = self.generate_main_topics(unique_tags, tag_counts, num_topics)
-            
-            if not main_topics:
-                logger.warning(f"⚠️ 列 {col} 主题生成失败")
-                continue
-            
-            # 将二级标签分配到一级主题
-            topic_assignments = self.assign_tags_to_topics(sub_tags_list, main_topics)
+            if self.use_reference_mode and self.reference_tags:
+                # 使用参考标签作为主题
+                main_topics = [tag['name'] for tag in self.reference_tags]
+                logger.info(f"🏷️  使用参考标签作为主题: {main_topics}")
+                
+                # 将二级标签分配到参考主题
+                topic_assignments = self._assign_to_reference_topics(sub_tags_list, main_topics)
+            else:
+                # 使用AI生成主题
+                num_topics = min(5, len(unique_tags))  # 根据标签数量动态调整主题数
+                main_topics = self.generate_main_topics(unique_tags, tag_counts, num_topics)
+                
+                if not main_topics:
+                    logger.warning(f"⚠️ 列 {col} 主题生成失败")
+                    continue
+                
+                # 将二级标签分配到一级主题
+                topic_assignments = self.assign_tags_to_topics(sub_tags_list, main_topics)
             
             # 更新DataFrame（一级主题）
             col_info = new_columns[col]
@@ -843,6 +1192,189 @@ class QuestionnaireTranslationClassifier:
         
         # 处理成功，返回True
         return True
+
+    def process_table_with_reference_tags(self, input_path, reference_tags, output_path=None):
+        """
+        基于参考标签重新打标的主方法
+        """
+        # 设置参考标签
+        self.set_reference_tags(reference_tags)
+        
+        # 调用原有的处理方法，但使用参考标签模式
+        return self.process_table(input_path, output_path)
+
+    def translate_only(self, input_path, output_path, open_ended_fields):
+        """只进行翻译，不进行AI分类 - 为后续的标准打标或参考标签打标做准备"""
+        try:
+            logger.info(f"🔧 开始只翻译处理: {input_path} -> {output_path}")
+            logger.info(f"📋 待翻译的开放题字段: {open_ended_fields}")
+            
+            # 读取输入文件
+            df = self.analyzer.read_data_file(input_path)
+            if df is None:
+                logger.error("❌ 文件读取失败")
+                return False
+            
+            # 验证API连接（如果OpenAI可用）
+            if self.client:
+                if not self.validate_api_connection():
+                    logger.error("❌ API连接验证失败，无法继续处理")
+                    return False
+            else:
+                logger.warning("⚠️ OpenAI客户端不可用，将直接复制文件")
+                # 如果没有OpenAI，直接复制文件
+                df.to_excel(output_path, index=False)
+                return True
+            
+            # 为每个开放题字段创建翻译列
+            for col in open_ended_fields:
+                if col in df.columns:
+                    col_idx = list(df.columns).index(col)
+                    cn_col = f"{col}-CN"
+                    
+                    # 插入新列
+                    df.insert(col_idx + 1, cn_col, "")
+                    logger.info(f"📍 {cn_col} 插入在 {col} 后面 (索引 {col_idx+1})")
+            
+            # 批量翻译处理
+            BATCH_SIZE = 50
+            total_rows = len(df)
+            
+            for col in open_ended_fields:
+                if col not in df.columns:
+                    continue
+                    
+                logger.info(f"\n🚀 开始翻译列: {col}")
+                cn_col = f"{col}-CN"
+                
+                # 准备文本数据
+                texts = df[col].fillna('').astype(str).tolist()
+                logger.info(f"📋 列 {col} 的文本数据量: {len(texts)}")
+                
+                translations = []
+                
+                # 使用已有的批量翻译方法
+                translations = self._batch_translate_texts(texts, col, BATCH_SIZE)
+                
+                # 更新DataFrame
+                df[cn_col] = translations
+                logger.info(f"✅ 列 {col} 翻译完成")
+            
+            # 保存结果
+            df.to_excel(output_path, index=False)
+            logger.info(f"✅ 翻译结果已保存: {output_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ 翻译处理失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+    
+    def standard_labeling_only(self, input_path, output_path):
+        """只进行标准AI分类，基于已翻译的数据"""
+        try:
+            logger.info(f"🔧 开始标准AI分类处理: {input_path} -> {output_path}")
+            
+            # 读取已翻译的文件
+            df = self.analyzer.read_data_file(input_path)
+            if df is None:
+                logger.error("❌ 文件读取失败")
+                return False
+            
+            # 验证API连接（如果OpenAI可用）
+            if self.client:
+                if not self.validate_api_connection():
+                    logger.error("❌ API连接验证失败，无法继续处理")
+                    return False
+            else:
+                logger.warning("⚠️ OpenAI客户端不可用，将直接复制文件")
+                df.to_excel(output_path, index=False)
+                return True
+            
+            # 识别已翻译的-CN字段
+            cn_columns = [col for col in df.columns if col.endswith('-CN')]
+            logger.info(f"🔍 发现 {len(cn_columns)} 个已翻译的-CN字段: {cn_columns}")
+            
+            if not cn_columns:
+                logger.error("❌ 未找到已翻译的-CN字段")
+                return False
+            
+            # 为每个-CN字段添加分类列
+            for cn_col in cn_columns:
+                original_col = cn_col.replace('-CN', '')
+                
+                # 找到-CN列的位置
+                cn_col_idx = list(df.columns).index(cn_col)
+                
+                # 创建分类列
+                sub_tags_col = f"{original_col}二级标签"
+                main_topic_col = f"{original_col}一级主题"
+                
+                # 插入新列
+                df.insert(cn_col_idx + 1, sub_tags_col, "")
+                df.insert(cn_col_idx + 2, main_topic_col, "")
+                
+                logger.info(f"📍 为 {cn_col} 添加分类列: {sub_tags_col}, {main_topic_col}")
+            
+            # 批量分类处理
+            BATCH_SIZE = 50
+            
+            for cn_col in cn_columns:
+                original_col = cn_col.replace('-CN', '')
+                sub_tags_col = f"{original_col}二级标签"
+                main_topic_col = f"{original_col}一级主题"
+                
+                logger.info(f"\n🚀 开始为 {cn_col} 进行AI分类")
+                
+                # 准备已翻译的文本数据
+                texts = df[cn_col].fillna('').astype(str).tolist()
+                logger.info(f"📋 已翻译文本数据量: {len(texts)}")
+                
+                sub_tags = []
+                main_topics = []
+                
+                # 批量分类
+                batches = [texts[i:i+BATCH_SIZE] for i in range(0, len(texts), BATCH_SIZE)]
+                logger.info(f"📊 分成 {len(batches)} 个批次分类，批次大小: {BATCH_SIZE}")
+                
+                for batch_idx, batch in enumerate(batches):
+                    logger.info(f"🔄 分类批次 {batch_idx + 1}/{len(batches)}")
+                    
+                    # 批量翻译+分类 (使用已有方法)
+                    batch_results = self.batch_translate_and_tag(batch, original_col, "中文", "中文", 15)
+                    
+                    # 提取结果 - batch_translate_and_tag 返回 [(translation, tags), ...]
+                    for translation, tags in batch_results:
+                        # 将标签分割为二级标签，并生成简化的一级主题
+                        tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()] if tags else []
+                        
+                        # 二级标签：使用所有生成的标签
+                        sub_tags.append(','.join(tag_list))
+                        
+                        # 一级主题：使用第一个标签作为主要主题，如果没有标签则为空
+                        main_topic = tag_list[0] if tag_list else ''
+                        main_topics.append(main_topic)
+                    
+                    # 添加延迟避免API限制
+                    if batch_idx < len(batches) - 1:
+                        time.sleep(1)
+                
+                # 更新DataFrame
+                df[sub_tags_col] = sub_tags
+                df[main_topic_col] = main_topics
+                logger.info(f"✅ {cn_col} AI分类完成")
+            
+            # 保存结果
+            df.to_excel(output_path, index=False)
+            logger.info(f"✅ 标准AI分类结果已保存: {output_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ 标准AI分类处理失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
 
 
 if __name__ == "__main__":

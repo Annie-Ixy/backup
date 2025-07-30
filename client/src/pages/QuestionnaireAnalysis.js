@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,9 +26,20 @@ import {
   Grid,
   Circle,
   MessageCircle,
+  Edit,
+  Search,
+  ChevronDown,
+  Tag,
+  Plus,
+  Minus,
+  Settings,
+  Database,
 } from 'lucide-react';
 import { questionnaireApi } from '../services/questionnaireApi';
+import { importToDatabase, getDatabaseStatus, testDatabaseConnection } from '../services/questionnaireApi';
 import Toast from '../components/Toast';
+import TagEditor from '../components/TagEditor';
+import LoadingScreen from '../components/LoadingScreen';
 
 import { isLogin } from '../utils/index.ts';
 
@@ -39,6 +50,7 @@ const QuestionnaireAnalysis = () => {
   const [file, setFile] = useState(null);
   const [uploadInfo, setUploadInfo] = useState(null);
   const [analysisId, setAnalysisId] = useState('');
+  const [uploadfilename, setUploadfilename] = useState('');
   const [selectedFields, setSelectedFields] = useState([]);
   const [fieldFilters, setFieldFilters] = useState({});
   const [customTags, setCustomTags] = useState([]);
@@ -68,12 +80,80 @@ const QuestionnaireAnalysis = () => {
   // 字段筛选模式状态
   const [filterMode, setFilterMode] = useState('byType'); // 'byType' | 'byField'
 
-  // Classification处理状态
+  // 翻译处理状态 (新增)
+  const [translationResult, setTranslationResult] = useState(null);
+  const [translationLoading, setTranslationLoading] = useState(false);
+  const [translationError, setTranslationError] = useState('');
+  const [translationCompleted, setTranslationCompleted] = useState(false);
+  // 翻译进度相关状态
+  const [translationProgress, setTranslationProgress] = useState(0);
+  const [translationStatus, setTranslationStatus] = useState('');
+  const [showTranslationProgress, setShowTranslationProgress] = useState(false);
+
+  // 功能选择状态 (新增)
+  const [activeMode, setActiveMode] = useState(null); // null | 'standard' | 'reference'
+  const [showFunctionSelector, setShowFunctionSelector] = useState(false);
+
+  // 标准AI打标状态 (重构)
+  const [standardLabelingResult, setStandardLabelingResult] = useState(null);
+  const [standardLabelingLoading, setStandardLabelingLoading] = useState(false);
+  const [standardLabelingError, setStandardLabelingError] = useState('');
+  // AI打标进度相关状态
+  const [aiLabelingProgress, setAiLabelingProgress] = useState(0);
+  const [aiLabelingStatus, setAiLabelingStatus] = useState('');
+  const [showAiLabelingProgress, setShowAiLabelingProgress] = useState(false);
+  
+  // Classification处理状态 (保持向后兼容)
   const [classificationResult, setClassificationResult] = useState(null);
   const [classificationLoading, setClassificationLoading] = useState(false);
   const [classificationError, setClassificationError] = useState('');
 
   const [groupedFields, setGroupedFields] = useState(new Map());  // 添加 groupedFields 状态
+
+  // 参考标签打标状态 (重构)
+  const [referenceLabelingResult, setReferenceLabelingResult] = useState(null);
+  const [showReferenceConfig, setShowReferenceConfig] = useState(false);
+  const [referenceTags, setReferenceTags] = useState([
+    { id: 1, name: '', definition: '', examples: [] }
+  ]);
+  const [retagLoading, setRetagLoading] = useState(false);
+  const [retagError, setRetagError] = useState('');
+  // 参考标签打标进度相关状态
+  const [referenceLabelingProgress, setReferenceLabelingProgress] = useState(0);
+  const [referenceLabelingStatus, setReferenceLabelingStatus] = useState('');
+  const [showReferenceLabelingProgress, setShowReferenceLabelingProgress] = useState(false);
+  const [showBatchImport, setShowBatchImport] = useState(true);
+  const [batchImportText, setBatchImportText] = useState('');
+  const [retagResult, setRetagResult] = useState(null);
+
+  // 手动编辑状态 (分离为两个独立的状态)
+  const [showTagEditor, setShowTagEditor] = useState(false);
+  const [standardManualData, setStandardManualData] = useState(null);
+  const [referenceManualData, setReferenceManualData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // 添加刷新触发器
+  
+  // 重新打标进度相关状态
+  const [retagProgress, setRetagProgress] = useState(0);
+  const [showRetagProgress, setShowRetagProgress] = useState(false);
+  const [retagStatus, setRetagStatus] = useState('');
+  
+  // 手动编辑状态
+  const [hasStartedManualEdit, setHasStartedManualEdit] = useState(false);
+
+  // 数据库相关状态
+  const [databaseStatus, setDatabaseStatus] = useState({
+    imported: false,
+    importing: false,
+    importTime: '',
+    recordCount: 0
+  });
+  const [showDatabaseDialog, setShowDatabaseDialog] = useState(false);
+  const [surveyTopic, setSurveyTopic] = useState('');
+
+  // 数据分页相关状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
+  const [totalPages, setTotalPages] = useState(1);
 
   let isLoginIndex = 0;
 
@@ -101,7 +181,14 @@ const QuestionnaireAnalysis = () => {
         setSelectedFields(validSelectedFields);
       }
     }
-  }, [pageTab, classificationResult]); // 移除 selectedFields 依赖
+  }, [pageTab, classificationResult, selectedFields]);
+
+  // 检查数据库状态
+  useEffect(() => {
+    if (analysisId) {
+      checkDatabaseStatus();
+    }
+  }, [analysisId]);
 
   // 拖拽上传处理
   const onDrop = useCallback((acceptedFiles, rejectedFiles) => {
@@ -136,6 +223,32 @@ const QuestionnaireAnalysis = () => {
 
     setLoading(true);
     setError('');
+    
+    // 重置所有相关状态
+    setTranslationResult(null);
+    setTranslationCompleted(false);
+    setTranslationError('');
+    setActiveMode(null);
+    setShowFunctionSelector(false);
+    setStandardLabelingResult(null);
+    setStandardLabelingError('');
+    setClassificationResult(null);
+    setReferenceLabelingResult(null);
+    setRetagResult(null);
+    setStandardManualData(null);
+    setReferenceManualData(null);
+    setHasStartedManualEdit(false);
+    setShowTagEditor(false);
+    setAnalysisResult(null);
+    setShowReferenceConfig(false);
+    setReferenceTags([{ id: 1, name: '', definition: '', examples: [] }]);
+    setRetagError('');
+    setClassificationError('');
+    setShowTaggingProgress(false);
+    setShowRetagProgress(false);
+    setShowAnalysisProgress(false);
+    setPageTab('upload');
+    
     try {
       const res = await questionnaireApi.upload(file);
       console.log('上传结果:', res);
@@ -148,6 +261,7 @@ const QuestionnaireAnalysis = () => {
       
       setUploadInfo(uploadInfo);
       setAnalysisId(res.analysisId);
+      setUploadfilename(file.name); // 存储文件名到test_filename变量
 
       // 初始化 groupedFields
       const newGroupedFields = new Map();
@@ -202,14 +316,16 @@ const QuestionnaireAnalysis = () => {
       }
       setGroupedFields(newGroupedFields);
       
-      // 文件上传成功后根据开放题数量决定跳转页面
+      // 文件上传成功后根据开放题数量决定后续流程
       const openEndedCount = res.questionTypes?.openEnded?.length || 0;
       if (openEndedCount === 0) {
         // 无开放题，直接跳转到统计分析页面
         setPageTab('results');
       } else {
-        // 有开放题，跳转到分析配置页面
-        setPageTab('config');
+        // 有开放题，自动开始翻译过程
+        console.log(`检测到 ${openEndedCount} 个开放题，开始自动翻译...`);
+        setPageTab('translation'); // 新的翻译页面
+        handleTranslateOpenQuestions(res.analysisId);
       }
       
       // 清除上一个文件的分类处理结果
@@ -220,6 +336,223 @@ const QuestionnaireAnalysis = () => {
       setError(err.message || '上传失败');
     }
     setLoading(false);
+  };
+
+  // 翻译开放题处理函数 (新增)
+  const handleTranslateOpenQuestions = async (analysisId) => {
+    setTranslationLoading(true);
+    setTranslationError('');
+    setShowTranslationProgress(true);
+    setTranslationProgress(0);
+    setTranslationStatus('准备翻译开放题...');
+    
+    try {
+      console.log('开始翻译开放题，分析ID:', analysisId);
+      
+      // 模拟翻译进度
+      const progressSteps = [
+        { progress: 10, status: '正在识别开放题字段...' },
+        { progress: 25, status: '正在连接翻译服务...' },
+        { progress: 40, status: '正在翻译问卷内容...' },
+        { progress: 70, status: '正在处理翻译结果...' },
+        { progress: 90, status: '正在保存翻译文件...' }
+      ];
+      
+      // 启动进度模拟
+      let currentStep = 0;
+      const progressInterval = setInterval(() => {
+        if (currentStep < progressSteps.length) {
+          const step = progressSteps[currentStep];
+          setTranslationProgress(step.progress);
+          setTranslationStatus(step.status);
+          currentStep++;
+        }
+      }, 800); // 每800ms更新一次进度
+      
+      const result = await questionnaireApi.translateOpenQuestions(analysisId);
+      console.log('翻译结果:', result);
+      
+      // 清除进度模拟
+      clearInterval(progressInterval);
+      
+      // 完成进度
+      setTranslationProgress(100);
+      setTranslationStatus('翻译完成！');
+      
+      // 延迟一下显示完成状态
+      setTimeout(() => {
+        setTranslationResult(result);
+        setTranslationCompleted(true);
+        setShowFunctionSelector(true); // 翻译完成后显示功能选择区域
+        setPageTab('function-selector'); // 切换到功能选择页面
+        setShowTranslationProgress(false);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('翻译失败:', error);
+      setTranslationError(error.message || '翻译失败');
+      setShowTranslationProgress(false);
+    }
+    setTranslationLoading(false);
+  };
+
+  // 标准AI打标处理函数 (新增)
+  const handleStandardLabeling = async () => {
+    if (!analysisId) {
+      setStandardLabelingError('请先上传文件');
+      return;
+    }
+
+    if (!translationCompleted) {
+      setStandardLabelingError('请先完成开放题翻译');
+      return;
+    }
+
+    setStandardLabelingLoading(true);
+    setStandardLabelingError('');
+    setActiveMode('standard');
+    setShowAiLabelingProgress(true);
+    setAiLabelingProgress(0);
+    setAiLabelingStatus('准备AI打标...');
+    
+    try {
+      console.log('开始标准AI打标，分析ID:', analysisId);
+      
+      // 模拟AI打标进度
+      const progressSteps = [
+        { progress: 15, status: '正在分析翻译后的文本...' },
+        { progress: 30, status: '正在连接AI服务...' },
+        { progress: 50, status: '正在执行智能分类...' },
+        { progress: 75, status: '正在生成标签和主题...' },
+        { progress: 90, status: '正在保存打标结果...' }
+      ];
+      
+      // 启动进度模拟
+      let currentStep = 0;
+      const progressInterval = setInterval(() => {
+        if (currentStep < progressSteps.length) {
+          const step = progressSteps[currentStep];
+          setAiLabelingProgress(step.progress);
+          setAiLabelingStatus(step.status);
+          currentStep++;
+        }
+      }, 1000); // 每1000ms更新一次进度
+      
+      const result = await questionnaireApi.standardLabeling(analysisId);
+      console.log('标准AI打标结果:', result);
+      
+      // 清除进度模拟
+      clearInterval(progressInterval);
+      
+      // 完成进度
+      setAiLabelingProgress(100);
+      setAiLabelingStatus('AI打标完成！');
+      
+      // 延迟一下显示完成状态
+      setTimeout(() => {
+        setStandardLabelingResult(result);
+        // 移除页面跳转，结果直接显示在当前页面下方
+        
+        // 更新刷新触发器，让TagEditor重新加载数据
+        setRefreshTrigger(prev => prev + 1);
+        setShowAiLabelingProgress(false);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('标准AI打标失败:', error);
+      setStandardLabelingError(error.message || '标准AI打标失败');
+      setShowAiLabelingProgress(false);
+    }
+    setStandardLabelingLoading(false);
+  };
+
+  // 参考标签打标处理函数 (重构)
+  const handleReferenceLabelingWithTags = async (referenceTagsToUse) => {
+    if (!analysisId) {
+      setRetagError('请先上传文件');
+      return;
+    }
+
+    if (!translationCompleted) {
+      setRetagError('请先完成开放题翻译');
+      return;
+    }
+
+    if (!referenceTagsToUse || referenceTagsToUse.length === 0) {
+      setRetagError('请提供参考标签');
+      return;
+    }
+
+    setRetagLoading(true);
+    setRetagError('');
+    setActiveMode('reference');
+    setShowReferenceLabelingProgress(true);
+    setReferenceLabelingProgress(0);
+    setReferenceLabelingStatus('准备参考标签打标...');
+    
+    try {
+      console.log('开始参考标签打标，分析ID:', analysisId);
+      console.log('参考标签:', referenceTagsToUse);
+      
+      // 模拟参考标签打标进度
+      const progressSteps = [
+        { progress: 20, status: '正在加载参考标签配置...' },
+        { progress: 35, status: '正在分析翻译后的文本...' },
+        { progress: 55, status: '正在匹配参考标签...' },
+        { progress: 80, status: '正在生成标签分配结果...' },
+        { progress: 95, status: '正在保存打标结果...' }
+      ];
+      
+      // 启动进度模拟
+      let currentStep = 0;
+      const progressInterval = setInterval(() => {
+        if (currentStep < progressSteps.length) {
+          const step = progressSteps[currentStep];
+          setReferenceLabelingProgress(step.progress);
+          setReferenceLabelingStatus(step.status);
+          currentStep++;
+        }
+      }, 1200); // 每1200ms更新一次进度
+      
+      const result = await questionnaireApi.retagWithReference(analysisId, referenceTagsToUse);
+      console.log('参考标签打标结果:', result);
+      
+      // 清除进度模拟
+      clearInterval(progressInterval);
+      
+      // 完成进度
+      setReferenceLabelingProgress(100);
+      setReferenceLabelingStatus('参考标签打标完成！');
+      
+      // 延迟一下显示完成状态
+      setTimeout(() => {
+        setRetagResult(result);
+        setReferenceLabelingResult(result);
+        // 移除页面跳转和配置界面隐藏，结果直接显示在当前页面下方
+        
+        // 更新刷新触发器，让TagEditor重新加载数据
+        setRefreshTrigger(prev => prev + 1);
+        setShowReferenceLabelingProgress(false);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('参考标签打标失败:', error);
+      setRetagError(error.message || '参考标签打标失败');
+      setShowReferenceLabelingProgress(false);
+    }
+    setRetagLoading(false);
+  };
+
+  // 获取当前活动的手动编辑数据
+  const getCurrentManualData = () => {
+    if (activeMode === 'standard') {
+      return standardManualData;
+    } else if (activeMode === 'reference') {
+      return referenceManualData;
+    } else {
+      // 向后兼容，优先返回标准打标的数据
+      return standardManualData;
+    }
   };
 
   // 获取分析统计
@@ -376,6 +709,9 @@ const QuestionnaireAnalysis = () => {
     setTaggingProgress(0);
     setTaggingStatus('正在准备数据...');
     
+    // 重置手动编辑状态
+    setHasStartedManualEdit(false);
+    
     try {
       // 模拟进度增加
       const progressInterval = setInterval(() => {
@@ -509,6 +845,450 @@ const QuestionnaireAnalysis = () => {
       console.error('下载失败:', error);
       setClassificationError('下载失败，请重试');
     }
+  };
+
+  // 下载重新打标结果
+  const downloadRetagResult = async () => {
+    if (!retagResult || !analysisId) return;
+
+    try {
+      // 使用重新打标的下载接口
+      window.open(window.location.origin+'/dev-api-py/download-retag/'+analysisId, '_blank');
+    } catch (error) {
+      console.error('下载重新打标结果失败:', error);
+      setRetagError('下载失败，请重试');
+    }
+  };
+
+  // 下载最终结果（手动编辑后的结果）
+  const downloadFinalResult = async () => {
+    if (!analysisId) return;
+
+    try {
+      // 使用最终结果的下载接口
+      window.open(window.location.origin+'/dev-api-py/download-final-result/'+analysisId, '_blank');
+    } catch (error) {
+      console.error('下载最终结果失败:', error);
+      setRetagError('下载失败，请重试');
+    }
+  };
+
+  // 下载标准AI打标结果
+  const downloadStandardLabelingResult = async () => {
+    if (!analysisId) {
+      console.error('❌ analysisId为空');
+      setStandardLabelingError('分析ID为空，无法下载');
+      return;
+    }
+
+    console.log('🔍 开始下载标准AI打标结果，analysisId:', analysisId);
+
+    try {
+      // 使用fetch方式下载，通过代理
+      const url = `/dev-api-py/download-standard-labeling/${analysisId}`;
+      console.log('📤 发送下载请求到:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+      });
+      
+      console.log('📥 下载响应状态:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        // 尝试获取错误详情
+        const errorText = await response.text();
+        console.error('❌ 服务器错误响应:', errorText);
+        
+        let errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMsg = errorJson.error || errorMsg;
+        } catch (e) {
+          // 如果不是JSON，使用原始错误文本
+          if (errorText) errorMsg = errorText;
+        }
+        
+        throw new Error(errorMsg);
+      }
+      
+      // 获取文件名
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `标准AI打标结果_${analysisId}.xlsx`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename[^;=\n]*=((['"]).?\2|[^;\n]*)/);
+        if (match) filename = match[1].replace(/['"]/g, '');
+      }
+      
+      console.log('📄 下载文件名:', filename);
+      
+      // 创建下载链接
+      const blob = await response.blob();
+      console.log('💾 文件大小:', blob.size, 'bytes');
+      
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      const name = uploadfilename.split('.')[0]+'_'+filename;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+      
+      console.log('✅ 下载完成');
+    } catch (error) {
+      console.error('❌ 下载标准AI打标结果失败:', error);
+      setStandardLabelingError(`下载失败: ${error.message}`);
+    }
+  };
+
+  // 下载标准AI手动编辑结果
+  const downloadAIManualResult = async () => {
+    if (!analysisId) return;
+
+    try {
+      // 使用fetch方式下载，通过代理
+      const response = await fetch(`/dev-api-py/download-ai-manual-result/${analysisId}`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      // 获取文件名
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `AI手动编辑结果_${analysisId}.xlsx`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename[^;=\n]*=((['"]).?\2|[^;\n]*)/);
+        if (match) filename = match[1].replace(/['"]/g, '');
+      }
+      
+      // 创建下载链接
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const name = uploadfilename.split('.')[0]+'_'+filename;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('下载AI手动编辑结果失败:', error);
+      setStandardLabelingError(`下载失败: ${error.message}`);
+    }
+  };
+
+  // 下载参考标签打标结果
+  const downloadCustomLabelingResult = async () => {
+    console.log('下载参考标签打标结果');
+    if (!analysisId) return;
+
+    try {
+      // 使用fetch方式下载，通过代理
+      const response = await fetch(`/dev-api-py/download-custom-labeling/${analysisId}`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      console.log('下载响应:', response);
+      // 获取文件名
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `参考标签打标结果_${analysisId}.xlsx`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename[^;=\n]*=((['"]).?\2|[^;\n]*)/);
+        if (match) filename = match[1].replace(/['"]/g, '');
+      }
+      
+      // 创建下载链接
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      console.log('下载链接:', uploadfilename);
+      const name = uploadfilename.split('.')[0]+'_'+filename;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('下载参考标签打标结果失败:', error);
+      setRetagError(`下载失败: ${error.message}`);
+    }
+  };
+
+  // 下载参考标签手动编辑结果
+  const downloadCustomManualResult = async () => {
+    if (!analysisId) return;
+
+    try {
+      // 使用fetch方式下载，通过代理
+      const response = await fetch(`/dev-api-py/download-custom-manual-result/${analysisId}`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      // 获取文件名
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `参考标签手动编辑结果_${analysisId}.xlsx`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename[^;=\n]*=((['"]).?\2|[^;\n]*)/);
+        if (match) filename = match[1].replace(/['"]/g, '');
+      }
+      
+      // 创建下载链接
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const name = uploadfilename.split('.')[0]+'_'+filename;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('下载参考标签手动编辑结果失败:', error);
+      setRetagError(`下载失败: ${error.message}`);
+    }
+  };
+
+  // 数据库相关函数
+  const checkDatabaseStatus = async () => {
+    if (!analysisId) return;
+    
+    try {
+      const status = await getDatabaseStatus(analysisId);
+      setDatabaseStatus({
+        imported: status.database_imported,
+        importing: false,
+        importTime: status.database_import_time,
+        recordCount: status.database_record_count
+      });
+    } catch (error) {
+      console.error('获取数据库状态失败:', error);
+    }
+  };
+
+  const handleImportToDatabase = async () => {
+    if (!analysisId) return;
+
+    setDatabaseStatus(prev => ({ ...prev, importing: true }));
+    
+    try {
+      const result = await importToDatabase(analysisId, surveyTopic);
+      
+      // 更新状态
+      setDatabaseStatus({
+        imported: true,
+        importing: false,
+        importTime: new Date().toISOString(),
+        recordCount: result.statistics?.total_records || 0
+      });
+      
+      // 显示成功消息
+      alert(`数据导入成功！\n导入记录数: ${result.statistics?.total_records || 0}\n数据库: ${result.database}\n表: ${result.table}`);
+      setShowDatabaseDialog(false);
+      
+    } catch (error) {
+      console.error('导入数据库失败:', error);
+      alert(`导入失败: ${error.message}`);
+      setDatabaseStatus(prev => ({ ...prev, importing: false }));
+    }
+  };
+
+  const handleShowDatabaseDialog = () => {
+    // 获取问卷名称作为默认主题
+    const defaultTopic = file?.name?.replace(/\.[^/.]+$/, '') || '';
+    setSurveyTopic(defaultTopic);
+    setShowDatabaseDialog(true);
+  };
+
+  // 参考标签相关函数
+  const addNewTag = () => {
+    const newTag = {
+      id: Date.now(),
+      name: '',
+      definition: '',
+      examples: []
+    };
+    setReferenceTags([...referenceTags, newTag]);
+  };
+
+  const removeTag = (tagId) => {
+    setReferenceTags(referenceTags.filter(tag => tag.id !== tagId));
+  };
+
+  const updateTag = (tagId, field, value) => {
+    setReferenceTags(referenceTags.map(tag => 
+      tag.id === tagId ? { ...tag, [field]: value } : tag
+    ));
+  };
+
+  const addKeyword = (tagId, keyword) => {
+    if (!keyword.trim()) return;
+    
+    setReferenceTags(referenceTags.map(tag => 
+      tag.id === tagId ? { 
+        ...tag, 
+        examples: [...(tag.examples || []), keyword.trim()]
+      } : tag
+    ));
+  };
+
+  const removeKeyword = (tagId, keyword) => {
+    setReferenceTags(referenceTags.map(tag => 
+      tag.id === tagId ? { 
+        ...tag, 
+        examples: (tag.examples || []).filter(k => k !== keyword)
+      } : tag
+    ));
+  };
+
+  const handleBatchImport = () => {
+    if (!batchImportText.trim()) {
+      alert('请输入要导入的标签数据');
+      return;
+    }
+
+    try {
+      // 解析输入的文本
+      const lines = batchImportText.trim().split('\n');
+      const parsedTags = [];
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        // 第一优先级：冒号分隔符分割标签名称和定义
+        const colonParts = line.split(/：|:/);
+        if (colonParts.length >= 2) {
+          const tagName = colonParts[0].trim();
+          const tagDefinition = colonParts.slice(1).join(':').trim();
+          if (tagName && tagDefinition) {
+            parsedTags.push({
+              id: Date.now() + i,
+              name: tagName,
+              definition: tagDefinition,
+              examples: []
+            });
+          }
+        } else {
+          // 第二优先级：多个空格分隔符
+          const spaceParts = line.split(/\s{2,}/);
+          if (spaceParts.length >= 2) {
+            const tagName = spaceParts[0].trim();
+            const tagDefinition = spaceParts.slice(1).join(' ').trim();
+            if (tagName && tagDefinition) {
+              parsedTags.push({
+                id: Date.now() + i,
+                name: tagName,
+                definition: tagDefinition,
+                examples: []
+              });
+            }
+          }
+        }
+      }
+
+      if (parsedTags.length === 0) {
+        alert('未能解析出有效的标签。请确保格式正确（支持格式：冒号分隔、多空格分隔）');
+        return;
+      }
+
+      // 直接导入，不显示确认对话框
+
+      // 检查是否只有初始的空标签
+      const hasOnlyEmptyTag = referenceTags.length === 1 && 
+                              !referenceTags[0].name.trim() && 
+                              !referenceTags[0].definition.trim();
+      
+      let newTags = [];
+      let duplicateCount = 0;
+      
+      if (hasOnlyEmptyTag) {
+        // 如果只有初始空标签，直接替换
+        setReferenceTags(parsedTags);
+        newTags = parsedTags;
+      } else {
+        // 追加新标签到现有标签（避免重复）
+        const existingTagNames = referenceTags.map(tag => tag.name.toLowerCase());
+        newTags = parsedTags.filter(tag => !existingTagNames.includes(tag.name.toLowerCase()));
+        duplicateCount = parsedTags.length - newTags.length;
+        
+        setReferenceTags([...referenceTags, ...newTags]);
+      }
+      setBatchImportText('');
+      
+      if (hasOnlyEmptyTag) {
+        alert(`成功导入 ${parsedTags.length} 个标签！`);
+      } else {
+        let message = `成功新增 ${newTags.length} 个标签！`;
+        if (duplicateCount > 0) {
+          message += ` 跳过了 ${duplicateCount} 个重复标签。`;
+        }
+        alert(message);
+      }
+
+    } catch (error) {
+      console.error('批量导入失败:', error);
+      alert('批量导入失败: ' + error.message);
+    }
+  };
+
+  const validateTagsConfig = () => {
+    if (referenceTags.length === 0) {
+      setRetagError('请至少添加一个参考标签');
+      return false;
+    }
+    
+    for (const tag of referenceTags) {
+      if (!tag.name || !tag.name.trim()) {
+        setRetagError('所有标签都必须有名称');
+        return false;
+      }
+      if (!tag.definition || !tag.definition.trim()) {
+        setRetagError('所有标签都必须有定义');
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
+  const handleRetagWithReference = async () => {
+    if (!analysisId) return;
+    
+    if (!validateTagsConfig()) return;
+
+      const validTags = referenceTags.filter(tag => 
+        tag.name && tag.name.trim() && 
+        tag.definition && tag.definition.trim()
+      );
+
+    // 调用新的参考标签打标处理函数
+    await handleReferenceLabelingWithTags(validTags);
+  };
+
+  const handleResetTags = () => {
+    setReferenceTags([{ id: 1, name: '', definition: '', examples: [] }]);
+    setRetagError('');
+  };
+
+  const handleSaveTagsConfig = () => {
+    if (!validateTagsConfig()) return;
+    
+    // 可以将配置保存到localStorage
+    localStorage.setItem('reference_tags_config', JSON.stringify(referenceTags));
+    alert('标签配置已保存');
   };
 
 
@@ -987,13 +1767,6 @@ const QuestionnaireAnalysis = () => {
           textColor: 'text-yellow-800',
           borderColor: 'border-yellow-500'
         };
-      // case 3:
-      //   return {
-      //     text: '多选/矩阵题',
-      //     bgColor: 'bg-purple-100',
-      //     textColor: 'text-purple-800',
-      //     borderColor: 'border-purple-500'
-      //   };
       default:
         return {
           text: '其他',
@@ -1206,6 +1979,32 @@ const QuestionnaireAnalysis = () => {
                   </div>
                 </button>
                 <button
+                  className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'translation'
+                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  onClick={() => setPageTab('translation')}
+                  disabled={loading || !analysisId}
+                >
+                  <div className="flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4" />
+                    翻译处理
+                  </div>
+                </button>
+                <button
+                  className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'function-selector'
+                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  onClick={() => setPageTab('function-selector')}
+                  disabled={loading || !analysisId || !translationCompleted}
+                >
+                  <div className="flex items-center gap-2">
+                    <Target className="w-4 h-4" />
+                    功能选择
+                  </div>
+                </button>
+                <button
                   className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'config'
                       ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
                       : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
@@ -1215,7 +2014,7 @@ const QuestionnaireAnalysis = () => {
                 >
                   <div className="flex items-center gap-2">
                     <BarChart3 className="w-4 h-4" />
-                    分析配置
+                    {/* 分析配置(旧)
                   </div>
                 </button>
                 <button
@@ -1227,7 +2026,7 @@ const QuestionnaireAnalysis = () => {
                   disabled={loading || !analysisId}
                 >
                   <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" />
+                    <BarChart3 className="w-4 h-4" /> */}
                     统计分析
                   </div>
                 </button>
@@ -1401,7 +2200,1527 @@ const QuestionnaireAnalysis = () => {
                     </motion.div>
                   )}
 
-                  
+                  {/* Translation Tab */}
+                  {pageTab === 'translation' && uploadInfo && (
+                    <motion.div
+                      key="translation"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <div className="space-y-6">
+                        <div className="bg-white rounded-lg shadow-lg p-6">
+                          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                            <MessageCircle className="w-5 h-5 text-blue-600" />
+                            开放题翻译处理
+                          </h2>
+
+                          {(translationLoading || showTranslationProgress) && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                  <span className="text-blue-800 font-medium">开放题翻译进行中</span>
+                                </div>
+                                
+                                {showTranslationProgress && (
+                                  <>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between text-sm">
+                                        <span className="text-blue-700">{translationStatus}</span>
+                                        <span className="text-blue-600 font-medium">{translationProgress}%</span>
+                                      </div>
+                                      <div className="w-full bg-blue-200 rounded-full h-2">
+                                        <div 
+                                          className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                                          style={{ width: `${translationProgress}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                                
+                                {!showTranslationProgress && (
+                                  <span className="text-blue-700 text-sm">正在翻译开放题内容，请稍候...</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {translationError && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                              <div className="flex items-center gap-2">
+                                <AlertCircle className="w-5 h-5 text-red-600" />
+                                <span className="text-red-800">翻译失败: {translationError}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {translationResult && (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <CheckCircle className="w-5 h-5 text-green-600" />
+                                <span className="text-green-800 font-medium">翻译完成</span>
+                              </div>
+                              <div className="text-sm text-green-700 space-y-1">
+                                <p>• 总回答数量: {translationResult.summary?.total_responses || 0}</p>
+                                <p>• 翻译字段数量: {translationResult.summary?.translated_fields || 0}</p>
+                                <p>• 开放题字段: {translationResult.summary?.open_ended_fields?.join(', ') || ''}</p>
+                              </div>
+                              
+                              <div className="mt-4">
+                                <button
+                                  onClick={() => setPageTab('function-selector')}
+                                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                >
+                                  继续选择打标方式
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 题型识别结果展示 */}
+                          {uploadInfo?.questionTypes && (
+                            <div className="mt-6 bg-white rounded-lg border border-gray-200 p-6">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <BarChart3 className="w-5 h-5 text-blue-600" />
+                                题型识别结果
+                              </h3>
+                              
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                                  <div className="text-center">
+                                    <div className="text-2xl font-bold text-blue-600">
+                                      {uploadInfo.questionTypes?.scaleQuestions?.length || 0}
+                                    </div>
+                                    <div className="text-gray-600">量表题</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="text-2xl font-bold text-orange-600">
+                                      {uploadInfo.questionTypes?.singleChoice?.length || 0}
+                                    </div>
+                                    <div className="text-gray-600">单选题</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="text-2xl font-bold text-red-600">
+                                      {uploadInfo.questionTypes?.openEnded?.length || 0}
+                                    </div>
+                                    <div className="text-gray-600">开放题</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* 详细题型列表 */}
+                              {(uploadInfo.questionTypes.openEnded?.length > 0 || 
+                                uploadInfo.questionTypes.scaleQuestions?.length > 0 || 
+                                uploadInfo.questionTypes.singleChoice?.length > 0) && (
+                                <details className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                  <summary className="cursor-pointer font-medium text-gray-800 mb-2">
+                                    📋 查看详细题型分布
+                                  </summary>
+                                  <div className="mt-3 space-y-4">
+                                    {/* 开放题列表 */}
+                                    {uploadInfo.questionTypes.openEnded?.length > 0 && (
+                                      <div>
+                                        <h5 className="font-medium text-red-800 mb-2">开放题 ({uploadInfo.questionTypes.openEnded.length}个)</h5>
+                                        <div className="space-y-1">
+                                          {uploadInfo.questionTypes.openEnded.map((question, index) => (
+                                            <div key={index} className="text-sm text-gray-700 bg-white p-2 rounded border">
+                                              {question.column}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 量表题列表 */}
+                                    {uploadInfo.questionTypes.scaleQuestions?.length > 0 && (
+                                      <div>
+                                        <h5 className="font-medium text-blue-800 mb-2">量表题 ({uploadInfo.questionTypes.scaleQuestions.length}个)</h5>
+                                        <div className="space-y-1">
+                                          {uploadInfo.questionTypes.scaleQuestions.map((question, index) => (
+                                            <div key={index} className="text-sm text-gray-700 bg-white p-2 rounded border">
+                                              {question.column || question}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 单选题列表 */}
+                                    {uploadInfo.questionTypes.singleChoice?.length > 0 && (
+                                      <div>
+                                        <h5 className="font-medium text-orange-800 mb-2">单选题 ({uploadInfo.questionTypes.singleChoice.length}个)</h5>
+                                        <div className="space-y-1">
+                                          {uploadInfo.questionTypes.singleChoice.map((question, index) => (
+                                            <div key={index} className="text-sm text-gray-700 bg-white p-2 rounded border">
+                                              {question.column || question}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </details>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Function Selector Tab */}
+                  {pageTab === 'function-selector' && uploadInfo && translationCompleted && (
+                    <motion.div
+                      key="function-selector"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <div className="space-y-6">
+                        <div className="bg-white rounded-lg shadow-lg p-6">
+                          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                            <Target className="w-5 h-5 text-blue-600" />
+                            选择打标方式
+                          </h2>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* 标准AI打标卡片 */}
+                            <div 
+                              className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${
+                                activeMode === 'standard' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
+                              }`}
+                              onClick={() => {
+                                console.log('点击标准AI打标区域，切换显示为standard模式');
+                                setActiveMode('standard');
+                                // 隐藏参考标签配置界面（但保留配置和结果数据）
+                                setShowReferenceConfig(false);
+                              }}
+                            >
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="p-3 bg-blue-100 rounded-full">
+                                  <BarChart3 className="w-6 h-6 text-blue-600" />
+                                </div>
+                                <div className="flex-1">
+                                  <h3 className="text-lg font-semibold text-gray-900">标准AI打标</h3>
+                                  {standardLabelingResult && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <CheckCircle className="w-4 h-4 text-green-600" />
+                                      <span className="text-sm text-green-600">已完成打标</span>
+                                      {standardManualData && (
+                                        <span className="text-sm text-orange-600 ml-2">• 已手动编辑</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <p className="text-gray-600 mb-4">
+                                使用AI模型自动识别问卷回答的主题和标签，生成一级主题和二级标签分类
+                              </p>
+                              
+                              <div className="space-y-2 text-sm text-gray-500 mb-4">
+                                <p>• 自动生成一级主题分类</p>
+                                <p>• 自动生成二级标签详情</p>
+                                <p>• 支持后续手动编辑</p>
+                              </div>
+
+                              {(standardLabelingLoading || showAiLabelingProgress) ? (
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 text-blue-600">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                                    <span className="font-medium">AI打标进行中</span>
+                                  </div>
+                                  
+                                  {showAiLabelingProgress && (
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between text-sm">
+                                        <span className="text-blue-700">{aiLabelingStatus}</span>
+                                        <span className="text-blue-600 font-medium">{aiLabelingProgress}%</span>
+                                      </div>
+                                      <div className="w-full bg-blue-200 rounded-full h-2">
+                                        <div 
+                                          className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                                          style={{ width: `${aiLabelingProgress}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {!showAiLabelingProgress && (
+                                    <span className="text-blue-700 text-sm">正在进行AI智能分类，请稍候...</span>
+                                  )}
+                                </div>
+                              ) : standardLabelingResult ? (
+                                <div className="space-y-2">
+                                  <div className="text-sm text-green-600 text-center">
+                                    ✅ 打标已完成，点击卡片查看结果
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation(); // 防止事件冒泡
+                                      handleStandardLabeling();
+                                    }}
+                                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                  >
+                                    重新标准打标
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // 防止事件冒泡
+                                    handleStandardLabeling();
+                                  }}
+                                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                  开始标准打标
+                                </button>
+                              )}
+
+                              {standardLabelingError && (
+                                <div className="mt-2 text-red-600 text-sm">
+                                  {standardLabelingError}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 参考标签打标卡片 */}
+                            <div 
+                              className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${
+                                activeMode === 'reference' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-green-300'
+                              }`}
+                              onClick={() => {
+                                console.log('点击参考标签打标区域，切换显示为reference模式');
+                                setActiveMode('reference');
+                              }}
+                            >
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="p-3 bg-green-100 rounded-full">
+                                  <Tag className="w-6 h-6 text-green-600" />
+                                </div>
+                                <div className="flex-1">
+                                  <h3 className="text-lg font-semibold text-gray-900">参考标签打标</h3>
+                                  {referenceLabelingResult && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <CheckCircle className="w-4 h-4 text-green-600" />
+                                      <span className="text-sm text-green-600">已完成打标</span>
+                                      {referenceManualData && (
+                                        <span className="text-sm text-orange-600 ml-2">• 已手动编辑</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <p className="text-gray-600 mb-4">
+                                基于用户定义的参考标签进行打标，确保分类结果符合特定需求
+                              </p>
+                              
+                              <div className="space-y-2 text-sm text-gray-500 mb-4">
+                                <p>• 自定义参考标签和定义</p>
+                                <p>• 基于参考标签智能匹配</p>
+                                <p>• 支持后续手动编辑</p>
+                              </div>
+
+                              {referenceLabelingResult ? (
+                                <div className="space-y-2">
+                                  <div className="text-sm text-green-600 text-center">
+                                    ✅ 打标已完成，点击卡片查看结果
+                                  </div>
+                                                                  <button
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // 防止事件冒泡
+                                    setActiveMode('reference'); // 确保设置为reference模式
+                                    setShowReferenceConfig(!showReferenceConfig);
+                                  }}
+                                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                >
+                                  {showReferenceConfig ? '隐藏配置' : '重新配置标签'}
+                                </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // 防止事件冒泡
+                                    setActiveMode('reference'); // 确保设置为reference模式
+                                    setShowReferenceConfig(!showReferenceConfig);
+                                  }}
+                                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                >
+                                  {showReferenceConfig ? '隐藏配置' : '配置参考标签'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 参考标签配置界面 - 只在activeMode为reference时显示 */}
+                          {activeMode === 'reference' && showReferenceConfig && (
+                            <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-6">
+                              <div className="flex justify-between items-center mb-4">
+                                <div>
+                                  <h5 className="text-lg font-semibold text-green-900 flex items-center gap-2">
+                                    <Target className="w-5 h-5" />
+                                    参考标签配置
+                                  </h5>
+                                  <p className="text-sm text-green-700 mt-1">
+                                    定义您的标签体系，系统将根据这些标签进行重新分类
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* 填写案例展示 */}
+                              <details className="mb-4 bg-white border border-green-200 rounded-lg">
+                                <summary className="cursor-pointer p-3 font-medium text-green-800 hover:bg-green-50 rounded-lg transition-colors">
+                                  💡 查看填写案例（点击展开）
+                                </summary>
+                                <div className="p-4 border-t border-green-100 bg-green-25">
+                                  <div className="grid md:grid-cols-2 gap-4 text-sm">
+                                    {/* 案例1 */}
+                                    <div className="bg-white p-3 rounded-lg border border-gray-200">
+                                      <h6 className="font-semibold text-gray-800 mb-2">案例1：用户满意度</h6>
+                                      <div className="space-y-1">
+                                        <div><span className="font-medium text-blue-600">标签名称：</span>用户满意</div>
+                                        <div><span className="font-medium text-blue-600">标签定义：</span>用户对产品或服务表达满意、喜欢或正面评价的内容</div>
+                                        <div><span className="font-medium text-blue-600">示例关键词：</span>很满意、喜欢、不错、好用</div>
+                                      </div>
+                                    </div>
+
+                                    {/* 案例2 */}
+                                    <div className="bg-white p-3 rounded-lg border border-gray-200">
+                                      <h6 className="font-semibold text-gray-800 mb-2">案例2：服务质量</h6>
+                                      <div className="space-y-1">
+                                        <div><span className="font-medium text-green-600">标签名称：</span>服务质量</div>
+                                        <div><span className="font-medium text-green-600">标签定义：</span>关于客服响应速度、服务态度、处理效率等服务体验相关的反馈</div>
+                                        <div><span className="font-medium text-green-600">示例关键词：</span>响应慢、服务态度、客服、处理效率</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+                                    <strong>提示：</strong>您可以参考以上案例来创建您的标签体系，标签名称要简洁明确，定义要准确描述该标签的含义和范围，示例关键词有助于AI更准确地识别相关内容。
+                                  </div>
+                                </div>
+                              </details>
+
+                              {/* 错误提示 */}
+                              {retagError && (
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                                  <div className="flex items-center gap-2 text-red-700">
+                                    <AlertCircle className="w-4 h-4" />
+                                    <span className="text-sm">{retagError}</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 参考标签打标进度条 */}
+                              {showReferenceLabelingProgress && (
+                                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                                  <div className="space-y-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
+                                      <span className="text-green-800 font-medium">参考标签打标进行中</span>
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between text-sm">
+                                        <span className="text-green-700">{referenceLabelingStatus}</span>
+                                        <span className="text-green-600 font-medium">{referenceLabelingProgress}%</span>
+                                      </div>
+                                      <div className="w-full bg-green-200 rounded-full h-2">
+                                        <div 
+                                          className="bg-green-600 h-2 rounded-full transition-all duration-300 ease-out"
+                                          style={{ width: `${referenceLabelingProgress}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 主要内容区域 - 左右布局 */}
+                              <div className={`grid gap-6 ${showBatchImport ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                {/* 左侧 - 标签输入区域 */}
+                                <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                                  {referenceTags.map((tag, index) => (
+                                  <div key={tag.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                                    <div className="flex justify-between items-center mb-3">
+                                      <span className="text-sm font-medium text-gray-700">标签 {index + 1}</span>
+                                      <button
+                                        onClick={() => removeTag(tag.id)}
+                                        className="text-red-500 hover:text-red-700 transition-colors"
+                                        disabled={referenceTags.length === 1}
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                      {/* 标签名称 */}
+                                      <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                          标签名称 *
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={tag.name}
+                                          onChange={(e) => updateTag(tag.id, 'name', e.target.value)}
+                                          placeholder="例如：服务质量"
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                                        />
+                                      </div>
+
+                                      {/* 标签定义 */}
+                                      <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                          标签定义 *
+                                        </label>
+                                        <textarea
+                                          value={tag.definition}
+                                          onChange={(e) => updateTag(tag.id, 'definition', e.target.value)}
+                                          placeholder="例如：服务响应速度、服务态度、处理效率等相关问题"
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                                          rows="3"
+                                        />
+                                      </div>
+
+                                      {/* 示例关键词 */}
+                                      <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                          示例关键词 (可选)
+                                        </label>
+                                        <div className="flex flex-wrap gap-2 mb-2">
+                                          {(tag.examples || []).map((keyword, kwIndex) => (
+                                            <span key={kwIndex} className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs">
+                                              {keyword}
+                                              <button
+                                                onClick={() => removeKeyword(tag.id, keyword)}
+                                                className="text-green-500 hover:text-green-700"
+                                              >
+                                                <X className="w-3 h-3" />
+                                              </button>
+                                            </span>
+                                          ))}
+                                        </div>
+                                        <input
+                                          type="text"
+                                          placeholder="输入关键词后按回车"
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault();
+                                              const value = e.target.value.trim();
+                                              if (value && !(tag.examples || []).includes(value)) {
+                                                addKeyword(tag.id, value);
+                                                e.target.value = '';
+                                              }
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+
+                                  {/* 添加新标签按钮 */}
+                                  <button
+                                    onClick={addNewTag}
+                                    className="w-full mt-4 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-green-500 hover:text-green-600 transition-colors flex items-center justify-center gap-2"
+                                  >
+                                    <Plus className="w-4 h-4" />
+                                    添加新标签
+                                  </button>
+                                </div>
+
+                                {/* 右侧 - 批量导入面板 */}
+                                {showBatchImport && (
+                                  <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                                    <div className="bg-white border border-green-200 rounded-lg p-4">
+                                      <h6 className="text-lg font-semibold text-green-800 mb-3 flex items-center gap-2">
+                                        <Target className="w-5 h-5" />
+                                        批量导入标签
+                                      </h6>
+                                      <div className="space-y-3">
+                                        <div>
+                                          <p className="text-sm text-gray-600 mb-2">
+                                            请按以下格式输入标签（支持冒号分隔、多空格分隔）：
+                                          </p>
+                                          <div className="text-xs text-gray-500 font-mono bg-gray-100 p-3 rounded-md">
+                                            产品功能：用户对产品核心功能（如喂食、饮水、监控）的评价<br/>
+                                            产品质量：产品耐用性、故障率及寿命的评价<br/>
+                                            安全性：产品对宠物和家庭安全风险的保障程度<br/>
+                                            组装操作难度：对硬件安装、操作流程的难易度、便利性反馈<br/>
+                                            日常维护：产品清洗和保养的难易度反馈<br/>
+                                            外观设计：产品外观、材质及体积的视觉与结构设计评价<br/>
+                                            包装与开箱体验：包装是否精美、配件是否齐全、说明书是否清晰易懂等<br/>
+                                            设备兼容性：是否兼容不同类型设备端/系统<br/>
+                                            智能家居联动：是否能够与家中其他智能设备同时使用<br/>
+                                            设备工作噪音：产品在使用过程中的噪音情况<br/>
+                                            宠物接纳度：宠物使用意愿及是否符合宠物生理特点（如是否引发胡须焦虑、高度是否合适）<br/>
+                                            网络连接：网络连接是否稳定、迅速、顺畅的评价<br/>
+                                            软件故障：软件错误或故障的存在反馈<br/>
+                                            App功能设计：软件产品功能是否能够满足需求<br/>
+                                            通知提醒：软件内通知提醒是否及时、有效、准确<br/>
+                                            订阅服务：对滤芯订阅、云存或增值服务的反馈<br/>
+                                            广告推送：推送频率是否可以接收、内容是否具有吸引力<br/>
+                                            App交互体验：软件用户界面及交互的易用性<br/>
+                                            性价比：对价格与产品价值的匹配度评价<br/>
+                                            客户服务：与品牌或平台相关的服务体验（如客服、物流、售后）<br/>
+                                            品牌信赖：表达与Petlibro信任、忠诚、喜爱等相应内容<br/>
+                                            无可用选项：以上标签均不涵盖的内容<br/>
+                                          </div>
+                                        </div>
+                                        <textarea
+                                          value={batchImportText}
+                                          onChange={(e) => setBatchImportText(e.target.value)}
+                                          placeholder="请粘贴标签数据，每行一个标签，支持格式：标签名称：标签定义 或 标签名称    标签定义"
+                                          className="w-full h-40 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm font-mono"
+                                        />
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={handleBatchImport}
+                                            disabled={!batchImportText.trim() || retagLoading}
+                                            className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-md font-medium transition-colors text-sm"
+                                          >
+                                            解析并导入
+                                          </button>
+                                          <button
+                                            onClick={() => setBatchImportText('')}
+                                            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md font-medium transition-colors text-sm"
+                                          >
+                                            清空
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              const sampleData = `产品功能：用户对产品核心功能（如喂食、饮水、监控）的评价
+产品质量：产品耐用性、故障率及寿命的评价
+安全性：产品对宠物和家庭安全风险的保障程度（如材料无毒、防误触设计、不漏电、无辐射等）
+组装操作难度：对硬件安装、操作流程的难易度、便利性反馈
+日常维护：产品清洗和保养的难易度反馈
+外观设计：产品外观、材质及体积的视觉与结构设计评价
+包装与开箱体验：包装是否精美、配件是否齐全、说明书是否清晰易懂等
+设备兼容性：是否兼容不同类型设备端/系统
+智能家居联动：是否能够与家中其他智能设备同时使用
+设备工作噪音：产品在使用过程中的噪音情况
+宠物接纳度：宠物使用意愿及是否符合宠物生理特点（如是否引发胡须焦虑、高度是否合适）
+网络连接：网络连接是否稳定、迅速、顺畅的评价
+软件故障：软件错误或故障的存在反馈
+App功能设计：软件产品功能是否能够满足需求
+通知提醒：软件内通知提醒是否及时、有效、准确
+订阅服务：对滤芯订阅、云存或增值服务的反馈
+广告推送：推送频率是否可以接收、内容是否具有吸引力
+App交互体验：软件用户界面及交互的易用性
+性价比：对价格与产品价值的匹配度评价
+客户服务：与品牌或平台相关的服务体验（如客服、物流、售后）
+品牌信赖：表达与Petlibro信任、忠诚、喜爱等相应内容
+无可用选项：以上标签均不涵盖的内容`;
+                                              setBatchImportText(sampleData);
+                                            }}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors text-sm"
+                                          >
+                                            加载示例
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 操作按钮 */}
+                              <div className="flex gap-2 mt-6">
+                                <button
+                                  onClick={async () => {
+                                    if (!validateTagsConfig()) return;
+                                    const validTags = referenceTags.filter(tag => 
+                                      tag.name && tag.name.trim() && 
+                                      tag.definition && tag.definition.trim()
+                                    );
+                                    await handleReferenceLabelingWithTags(validTags);
+                                  }}
+                                  disabled={retagLoading}
+                                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                                >
+                                  {(retagLoading || showReferenceLabelingProgress) ? (
+                                    <>
+                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                      打标中...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Target className="w-4 h-4" />
+                                      开始打标
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={handleResetTags}
+                                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                                >
+                                  重置
+                                </button>
+                                <button
+                                  onClick={handleSaveTagsConfig}
+                                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                                >
+                                  保存配置
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 状态提示 */}
+                          {translationResult && !activeMode && (
+                            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle className="w-5 h-5 text-blue-600" />
+                                <span className="text-blue-800 font-medium">翻译已完成，请点击选择打标方式</span>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* 活动模式提示 */}
+                          {activeMode && (
+                            <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                              <div className="flex items-center gap-2">
+                                <Target className="w-5 h-5 text-gray-600" />
+                                <span className="text-gray-800 font-medium">
+                                  当前查看: {activeMode === 'standard' ? '标准AI打标' : '参考标签打标'}
+                                </span>
+                                <span className="text-sm text-gray-600 ml-2">
+                                  (可随时切换查看，数据已保留)
+                                </span>
+                                <button 
+                                  onClick={() => {
+                                    console.log('重新选择打标方式，保留所有结果数据');
+                                    setActiveMode(null);
+                                    setShowReferenceConfig(false);
+                                  }}
+                                  className="ml-auto px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                                >
+                                  重新选择
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 标准AI打标结果显示区域 - 只在activeMode为standard时显示 */}
+                          {activeMode === 'standard' && standardLabelingResult && standardLabelingResult.processed_data && (
+                            <div className="mt-6 mb-8">
+                              <div className="bg-white rounded-lg shadow-lg p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                  <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                    <Table className="w-5 h-5 text-blue-600" />
+                                    标准AI打标结果
+                                  </h4>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={downloadStandardLabelingResult}
+                                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                      下载结果
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        console.log('点击手动编辑按钮,设置activeMode为standard');
+                                        setActiveMode('standard');
+                                        setShowTagEditor(true);
+                                      }}
+                                      className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                      手动编辑
+                                    </button>
+                                  </div>
+                                </div>
+                                <p className="text-sm text-gray-600 mb-4">
+                                  已完成标准AI打标处理，生成了一级主题和二级标签，以下是处理后的数据预览
+                                </p>
+
+                                {/* 处理结果摘要 */}
+                                {standardLabelingResult.summary && (
+                                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                    <h5 className="font-semibold text-blue-900 mb-2">处理摘要</h5>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-blue-600">{standardLabelingResult.summary.total_responses || 0}</div>
+                                        <div className="text-gray-600">总响应数</div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-blue-600">{standardLabelingResult.summary.processed_fields || 0}</div>
+                                        <div className="text-gray-600">处理字段数</div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-blue-600">{standardLabelingResult.processed_data?.length || 0}</div>
+                                        <div className="text-gray-600">总字段数</div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-blue-600">标准AI</div>
+                                        <div className="text-gray-600">处理类型</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* 数据预览表格 */}
+                                <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                                    <div className="flex items-center justify-between">
+                                      <h5 className="text-sm font-semibold text-gray-900">标准AI打标数据预览</h5>
+                                      <span className="text-xs text-gray-500">
+                                        表格支持上下左右滚动查看完整数据 • 共 {standardLabelingResult.processed_data?.length || 0} 个字段 • 共 {standardLabelingResult.summary?.total_responses || standardLabelingResult.sample_size || 0} 行
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="overflow-auto max-h-96">
+                                    <table className="w-full divide-y divide-gray-200">
+                                      <thead className="bg-gray-50 sticky top-0 z-20">
+                                        <tr>
+                                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-300 sticky left-0 z-10 bg-gray-50 min-w-[60px]">
+                                            <div className="flex flex-col">
+                                              <span className="text-xs text-gray-500">#</span>
+                                            </div>
+                                          </th>
+                                          {standardLabelingResult.processed_data?.map((field, index) => (
+                                            <th key={index} className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-300 bg-gray-50 min-w-[150px] max-w-[250px]">
+                                              <div className="flex flex-col">
+                                                <span className="truncate" title={field.field}>
+                                                  {field.field}
+                                                </span>
+                                                <span className="text-xs text-blue-500 font-normal">
+                                                  字段 {index + 1}
+                                                </span>
+                                              </div>
+                                            </th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {(() => {
+                                          // 计算总行数和总页数
+                                          const totalRows = standardLabelingResult.processed_data?.[0]?.values?.length || 0;
+                                          const calculatedTotalPages = Math.ceil(totalRows / rowsPerPage);
+                                          
+                                          // 计算当前页的起始和结束行索引
+                                          const startIndex = (currentPage - 1) * rowsPerPage;
+                                          const endIndex = Math.min(startIndex + rowsPerPage, totalRows);
+                                          
+                                          // 创建当前页的行
+                                          const rows = [];
+                                          for (let rowIndex = startIndex; rowIndex < endIndex; rowIndex++) {
+                                            rows.push(
+                                              <tr key={rowIndex} className="hover:bg-gray-50 transition-colors">
+                                                <td className="px-4 py-3 text-sm text-gray-500 border-b border-gray-200 font-mono bg-gray-50 sticky left-0 z-10 min-w-[60px]">
+                                                  {rowIndex + 1}
+                                                </td>
+                                                {standardLabelingResult.processed_data?.map((field, fieldIndex) => (
+                                                  <td key={fieldIndex} className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200 max-w-[250px]">
+                                                    <div 
+                                                      className="truncate cursor-help" 
+                                                      title={field.values?.[rowIndex] || ''}
+                                                    >
+                                                      {field.values?.[rowIndex] || ''}
+                                                    </div>
+                                                  </td>
+                                                ))}
+                                              </tr>
+                                            );
+                                          }
+                                          return rows;
+                                        })()}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                  
+                                  <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-xs text-gray-600">
+                                    <div className="flex justify-between items-center">
+                                      <span>第 {(currentPage - 1) * rowsPerPage + 1}-{Math.min(currentPage * rowsPerPage, standardLabelingResult.processed_data?.[0]?.values?.length || 0)} 行，共 {standardLabelingResult.processed_data?.[0]?.values?.length || 0} 行</span>
+                                      
+                                      {/* 分页控制器 */}
+                                      <div className="flex items-center space-x-2">
+                                        <button
+                                          onClick={() => setCurrentPage(1)}
+                                          disabled={currentPage === 1}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          首页
+                                        </button>
+                                        <button
+                                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                          disabled={currentPage === 1}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          上一页
+                                        </button>
+                                        
+                                        <span className="text-sm">
+                                          {currentPage}/{Math.ceil((standardLabelingResult.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                        </span>
+                                        
+                                        <button
+                                          onClick={() => {
+                                            const maxPage = Math.ceil((standardLabelingResult.processed_data?.[0]?.values?.length || 0) / rowsPerPage);
+                                            setCurrentPage(prev => Math.min(prev + 1, maxPage));
+                                          }}
+                                          disabled={currentPage >= Math.ceil((standardLabelingResult.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          下一页
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            const maxPage = Math.ceil((standardLabelingResult.processed_data?.[0]?.values?.length || 0) / rowsPerPage);
+                                            setCurrentPage(maxPage);
+                                          }}
+                                          disabled={currentPage >= Math.ceil((standardLabelingResult.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          末页
+                                        </button>
+                                        
+                                        <select
+                                          value={rowsPerPage}
+                                          onChange={(e) => {
+                                            const newRowsPerPage = parseInt(e.target.value, 10);
+                                            setRowsPerPage(newRowsPerPage);
+                                            // 调整当前页，确保不会超出范围
+                                            const maxPage = Math.ceil((standardLabelingResult.processed_data?.[0]?.values?.length || 0) / newRowsPerPage);
+                                            if (currentPage > maxPage) {
+                                              setCurrentPage(maxPage);
+                                            }
+                                          }}
+                                          className="ml-2 px-2 py-1 bg-white border border-gray-300 rounded text-sm"
+                                        >
+                                          <option value={10}>10行/页</option>
+                                          <option value={25}>25行/页</option>
+                                          <option value={50}>50行/页</option>
+                                          <option value={100}>100行/页</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+
+                          
+                          {/* 标准AI打标手动编辑后数据预览 - 只在activeMode为standard时显示 */}
+                          {activeMode === 'standard' && standardManualData && (standardManualData.processed_data || standardManualData.data) && (
+                            <div className="mt-6 mb-8">
+                              <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-orange-500">
+                                <div className="flex justify-between items-center mb-4">
+                                  <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                    <Edit className="w-5 h-5 text-orange-600" />
+                                    手动编辑标签后的数据预览 (前10行预览)
+                                  </h4>
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      onClick={downloadAIManualResult}
+                                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                      下载结果
+                                    </button>
+                                    <div className="flex items-center gap-2 text-sm text-orange-700 bg-orange-50 px-3 py-1 rounded-lg">
+                                      <CheckCircle className="w-4 h-4" />
+                                      <span>已手动编辑</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 编辑摘要 */}
+                                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                                  <h5 className="font-semibold text-orange-900 mb-2">编辑摘要</h5>
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                    <div className="text-center">
+                                      <div className="text-lg font-bold text-orange-600">{standardManualData.modifications_count || 0}</div>
+                                      <div className="text-gray-600">修改次数</div>
+                                    </div>
+                                                                          <div className="text-center">
+                                        <div className="text-lg font-bold text-blue-600">{standardManualData.processed_data?.length || 0}</div>
+                                        <div className="text-gray-600">字段数量</div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-green-600">{standardManualData.total_rows || 0}</div>
+                                        <div className="text-gray-600">数据行数</div>
+                                      </div>
+                                    <div className="text-center">
+                                      <div className="text-lg font-bold text-orange-600">手动编辑</div>
+                                      <div className="text-gray-600">数据类型</div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 数据预览表格 */}
+                                <div className="bg-white rounded-lg border border-orange-200 shadow-sm">
+                                  <div className="px-4 py-3 border-b border-orange-200 bg-orange-50">
+                                    <div className="flex items-center justify-between">
+                                      <h5 className="text-sm font-semibold text-gray-900">手动编辑后数据预览</h5>
+                                      <span className="text-xs text-gray-500">
+                                        表格支持上下左右滚动查看完整数据 • 共 {standardManualData.processed_data?.length || 0} 个字段 • 显示前10行
+                                        {standardManualData.file_info && (
+                                          <span className="ml-2 text-orange-600">📁 {standardManualData.file_info.filename}</span>
+                                        )}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="overflow-auto max-h-96">
+                                    <table className="w-full divide-y divide-gray-200">
+                                      <thead className="bg-orange-50 sticky top-0 z-20">
+                                        <tr>
+                                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-orange-300 sticky left-0 z-10 bg-orange-50 min-w-[60px]">
+                                            <div className="flex flex-col">
+                                              <span className="text-xs text-gray-500">#</span>
+                                            </div>
+                                          </th>
+                                          {standardManualData.processed_data?.map((field, index) => (
+                                            <th key={index} className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-orange-300 bg-orange-50 min-w-[150px] max-w-[250px]">
+                                              <div className="flex flex-col">
+                                                <span className="truncate" title={field.field}>
+                                                  {field.field}
+                                                </span>
+                                                <span className="text-xs text-orange-500 font-normal">
+                                                  字段 {index + 1}
+                                                </span>
+                                              </div>
+                                            </th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {(() => {
+                                          // 计算总行数和总页数
+                                          const totalRows = standardManualData.processed_data?.[0]?.values?.length || 0;
+                                          const calculatedTotalPages = Math.ceil(totalRows / rowsPerPage);
+                                          
+                                          // 计算当前页的起始和结束行索引
+                                          const startIndex = (currentPage - 1) * rowsPerPage;
+                                          const endIndex = Math.min(startIndex + rowsPerPage, totalRows);
+                                          
+                                          // 创建当前页的行
+                                          const rows = [];
+                                          for (let rowIndex = startIndex; rowIndex < endIndex; rowIndex++) {
+                                            rows.push(
+                                              <tr key={rowIndex} className="hover:bg-orange-50 transition-colors">
+                                                <td className="px-4 py-3 text-sm text-gray-500 border-b border-gray-200 font-mono bg-orange-50 sticky left-0 z-10 min-w-[60px]">
+                                                  <div className="flex items-center justify-center">
+                                                    <span className="w-6 h-6 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-xs font-medium">
+                                                      {rowIndex + 1}
+                                                    </span>
+                                                  </div>
+                                                </td>
+                                                {standardManualData.processed_data?.map((field, fieldIndex) => (
+                                                  <td key={fieldIndex} className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200 max-w-[250px]">
+                                                    <div 
+                                                      className="truncate cursor-help" 
+                                                      title={field.values?.[rowIndex] || ''}
+                                                    >
+                                                      {field.values?.[rowIndex] || ''}
+                                                    </div>
+                                                  </td>
+                                                ))}
+                                              </tr>
+                                            );
+                                          }
+                                          return rows;
+                                        })()}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                  
+                                  <div className="px-4 py-3 bg-orange-50 border-t border-orange-200 text-xs text-gray-600">
+                                    <div className="flex justify-between items-center">
+                                      <div className="flex items-center gap-2">
+                                        <span>第 {(currentPage - 1) * rowsPerPage + 1}-{Math.min(currentPage * rowsPerPage, standardManualData.processed_data?.[0]?.values?.length || 0)} 行，共 {standardManualData.processed_data?.[0]?.values?.length || 0} 行</span>
+                                        <span className="text-orange-600">✨ 已手动编辑</span>
+                                      </div>
+                                      
+                                      {/* 分页控制器 */}
+                                      <div className="flex items-center space-x-2">
+                                        <button
+                                          onClick={() => setCurrentPage(1)}
+                                          disabled={currentPage === 1}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          首页
+                                        </button>
+                                        <button
+                                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                          disabled={currentPage === 1}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          上一页
+                                        </button>
+                                        
+                                        <span className="text-sm">
+                                          {currentPage}/{Math.ceil((standardManualData.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                        </span>
+                                        
+                                        <button
+                                          onClick={() => {
+                                            const maxPage = Math.ceil((standardManualData.processed_data?.[0]?.values?.length || 0) / rowsPerPage);
+                                            setCurrentPage(prev => Math.min(prev + 1, maxPage));
+                                          }}
+                                          disabled={currentPage >= Math.ceil((standardManualData.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          下一页
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            const maxPage = Math.ceil((standardManualData.processed_data?.[0]?.values?.length || 0) / rowsPerPage);
+                                            setCurrentPage(maxPage);
+                                          }}
+                                          disabled={currentPage >= Math.ceil((standardManualData.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          末页
+                                        </button>
+                                        
+                                        <select
+                                          value={rowsPerPage}
+                                          onChange={(e) => {
+                                            const newRowsPerPage = parseInt(e.target.value, 10);
+                                            setRowsPerPage(newRowsPerPage);
+                                            // 调整当前页，确保不会超出范围
+                                            const maxPage = Math.ceil((standardManualData.processed_data?.[0]?.values?.length || 0) / newRowsPerPage);
+                                            if (currentPage > maxPage) {
+                                              setCurrentPage(maxPage);
+                                            }
+                                          }}
+                                          className="ml-2 px-2 py-1 bg-white border border-gray-300 rounded text-sm"
+                                        >
+                                          <option value={10}>10行/页</option>
+                                          <option value={25}>25行/页</option>
+                                          <option value={50}>50行/页</option>
+                                          <option value={100}>100行/页</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 参考标签打标结果显示区域 - 只在activeMode为reference时显示 */}
+                          {activeMode === 'reference' && referenceLabelingResult && referenceLabelingResult.processed_data && (
+                            <div className="mt-6 mb-8">
+                              <div className="bg-white rounded-lg shadow-lg p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                  <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                    <Table className="w-5 h-5 text-green-600" />
+                                    参考标签打标结果
+                                  </h4>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={downloadCustomLabelingResult}
+                                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                      下载结果
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        console.log('点击手动编辑按钮,设置activeMode为reference');
+                                        setActiveMode('reference');
+                                        setShowTagEditor(true);
+                                      }}
+                                      className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                      手动编辑
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* 处理摘要 */}
+                                {referenceLabelingResult.summary && (
+                                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                                    <h5 className="font-semibold text-green-900 mb-2">处理摘要</h5>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-green-600">{referenceLabelingResult.summary.total_responses || 0}</div>
+                                        <div className="text-gray-600">总响应数</div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-blue-600">{referenceLabelingResult.summary.processed_fields || 0}</div>
+                                        <div className="text-gray-600">已处理字段</div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-purple-600">{referenceLabelingResult.processed_data?.length || 0}</div>
+                                        <div className="text-gray-600">字段数量</div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-green-600">参考标签</div>
+                                        <div className="text-gray-600">处理类型</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* 数据预览表格 */}
+                                <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                                    <div className="flex items-center justify-between">
+                                      <h5 className="text-sm font-semibold text-gray-900">参考标签打标数据预览</h5>
+                                      <span className="text-xs text-gray-500">
+                                        表格支持上下左右滚动查看完整数据 • 共 {referenceLabelingResult.processed_data?.length || 0} 个字段 • 共 {referenceLabelingResult.summary?.total_responses || referenceLabelingResult.sample_size || 0} 行
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="overflow-auto max-h-96">
+                                    <table className="w-full divide-y divide-gray-200">
+                                      <thead className="bg-gray-50 sticky top-0 z-20">
+                                        <tr>
+                                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-300 sticky left-0 z-10 bg-gray-50 min-w-[60px]">
+                                            <div className="flex flex-col">
+                                              <span className="text-xs text-gray-500">#</span>
+                                            </div>
+                                          </th>
+                                          {referenceLabelingResult.processed_data?.map((field, index) => (
+                                            <th key={index} className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-300 bg-gray-50 min-w-[150px] max-w-[250px]">
+                                              <div className="flex flex-col">
+                                                <span className="truncate" title={field.field}>
+                                                  {field.field}
+                                                </span>
+                                                <span className="text-xs text-green-500 font-normal">
+                                                  字段 {index + 1}
+                                                </span>
+                                              </div>
+                                            </th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {(() => {
+                                          // 计算总行数和总页数
+                                          const totalRows = referenceLabelingResult.processed_data?.[0]?.values?.length || 0;
+                                          const calculatedTotalPages = Math.ceil(totalRows / rowsPerPage);
+                                          
+                                          // 计算当前页的起始和结束行索引
+                                          const startIndex = (currentPage - 1) * rowsPerPage;
+                                          const endIndex = Math.min(startIndex + rowsPerPage, totalRows);
+                                          
+                                          // 创建当前页的行
+                                          const rows = [];
+                                          for (let rowIndex = startIndex; rowIndex < endIndex; rowIndex++) {
+                                            rows.push(
+                                              <tr key={rowIndex} className="hover:bg-gray-50 transition-colors">
+                                                <td className="px-4 py-3 text-sm text-gray-500 border-b border-gray-200 font-mono bg-gray-50 sticky left-0 z-10 min-w-[60px]">
+                                                  <div className="flex items-center justify-center">
+                                                    <span className="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs font-medium">
+                                                      {rowIndex + 1}
+                                                    </span>
+                                                  </div>
+                                                </td>
+                                                {referenceLabelingResult.processed_data?.map((field, fieldIndex) => (
+                                                  <td key={fieldIndex} className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200 min-w-[150px] max-w-[250px]">
+                                                    <div className="group relative">
+                                                      <div 
+                                                        className="truncate cursor-help"
+                                                        title={field.values?.[rowIndex] || '-'}
+                                                      >
+                                                        {field.values?.[rowIndex] || '-'}
+                                                      </div>
+                                                    </div>
+                                                  </td>
+                                                ))}
+                                              </tr>
+                                            );
+                                          }
+                                          return rows;
+                                        })()}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                  
+                                  <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-xs text-gray-600">
+                                    <div className="flex justify-between items-center">
+                                      <span>第 {(currentPage - 1) * rowsPerPage + 1}-{Math.min(currentPage * rowsPerPage, referenceLabelingResult.processed_data?.[0]?.values?.length || 0)} 行，共 {referenceLabelingResult.processed_data?.[0]?.values?.length || 0} 行</span>
+                                      
+                                      {/* 分页控制器 */}
+                                      <div className="flex items-center space-x-2">
+                                        <button
+                                          onClick={() => setCurrentPage(1)}
+                                          disabled={currentPage === 1}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          首页
+                                        </button>
+                                        <button
+                                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                          disabled={currentPage === 1}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          上一页
+                                        </button>
+                                        
+                                        <span className="text-sm">
+                                          {currentPage}/{Math.ceil((referenceLabelingResult.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                        </span>
+                                        
+                                        <button
+                                          onClick={() => {
+                                            const maxPage = Math.ceil((referenceLabelingResult.processed_data?.[0]?.values?.length || 0) / rowsPerPage);
+                                            setCurrentPage(prev => Math.min(prev + 1, maxPage));
+                                          }}
+                                          disabled={currentPage >= Math.ceil((referenceLabelingResult.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          下一页
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            const maxPage = Math.ceil((referenceLabelingResult.processed_data?.[0]?.values?.length || 0) / rowsPerPage);
+                                            setCurrentPage(maxPage);
+                                          }}
+                                          disabled={currentPage >= Math.ceil((referenceLabelingResult.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          末页
+                                        </button>
+                                        
+                                        <select
+                                          value={rowsPerPage}
+                                          onChange={(e) => {
+                                            const newRowsPerPage = parseInt(e.target.value, 10);
+                                            setRowsPerPage(newRowsPerPage);
+                                            // 调整当前页，确保不会超出范围
+                                            const maxPage = Math.ceil((referenceLabelingResult.processed_data?.[0]?.values?.length || 0) / newRowsPerPage);
+                                            if (currentPage > maxPage) {
+                                              setCurrentPage(maxPage);
+                                            }
+                                          }}
+                                          className="ml-2 px-2 py-1 bg-white border border-gray-300 rounded text-sm"
+                                        >
+                                          <option value={10}>10行/页</option>
+                                          <option value={25}>25行/页</option>
+                                          <option value={50}>50行/页</option>
+                                          <option value={100}>100行/页</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+
+
+                          {/* 参考标签打标手动编辑后数据预览 */}
+                          {referenceManualData && referenceManualData.processed_data && activeMode === 'reference' && (
+                            <div className="mt-6 mb-8">
+                              <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-purple-500">
+                                <div className="flex justify-between items-center mb-4">
+                                                                      <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                    <Edit className="w-5 h-5 text-purple-600" />
+                                    参考标签打标手动编辑结果
+                                  </h4>
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      onClick={downloadCustomManualResult}
+                                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                      下载结果
+                                    </button>
+                                    <div className="flex items-center gap-2 text-sm text-purple-700 bg-purple-50 px-3 py-1 rounded-lg">
+                                      <CheckCircle className="w-4 h-4" />
+                                      <span>已手动编辑</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 编辑摘要 */}
+                                {referenceManualData.modifications_count && (
+                                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                                    <h5 className="font-semibold text-purple-900 mb-2">编辑摘要</h5>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-purple-600">{referenceManualData.modifications_count || 0}</div>
+                                        <div className="text-gray-600">修改次数</div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-blue-600">{referenceManualData.processed_data?.length || 0}</div>
+                                        <div className="text-gray-600">字段数量</div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-green-600">{referenceManualData.processed_data?.[0]?.values?.length || 0}</div>
+                                        <div className="text-gray-600">数据行数</div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-lg font-bold text-purple-600">手动编辑</div>
+                                        <div className="text-gray-600">数据类型</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* 数据预览表格 */}
+                                <div className="bg-white rounded-lg border border-purple-200 shadow-sm">
+                                  <div className="px-4 py-3 border-b border-purple-200 bg-purple-50">
+                                    <div className="flex items-center justify-between">
+                                      <h5 className="text-sm font-semibold text-gray-900">手动编辑后数据预览</h5>
+                                      <span className="text-xs text-gray-500">
+                                        表格支持上下左右滚动查看完整数据 • 共 {referenceManualData.processed_data?.length || 0} 个字段 • 共 {referenceManualData.processed_data?.[0]?.values?.length || 0} 行
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="overflow-auto max-h-96">
+                                    <table className="w-full divide-y divide-gray-200">
+                                      <thead className="bg-purple-50 sticky top-0 z-20">
+                                        <tr>
+                                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-purple-300 sticky left-0 z-10 bg-purple-50 min-w-[60px]">
+                                            <div className="flex flex-col">
+                                              <span className="text-xs text-gray-500">#</span>
+                                            </div>
+                                          </th>
+                                          {referenceManualData.processed_data?.map((field, index) => (
+                                            <th key={index} className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-purple-300 bg-purple-50 min-w-[150px] max-w-[250px]">
+                                              <div className="flex flex-col">
+                                                <span className="truncate" title={field.field}>
+                                                  {field.field}
+                                                </span>
+                                                <span className="text-xs text-purple-500 font-normal">
+                                                  字段 {index + 1}
+                                                </span>
+                                              </div>
+                                            </th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {(() => {
+                                          // 计算总行数和总页数
+                                          const totalRows = referenceManualData.processed_data?.[0]?.values?.length || 0;
+                                          const calculatedTotalPages = Math.ceil(totalRows / rowsPerPage);
+                                          
+                                          // 计算当前页的起始和结束行索引
+                                          const startIndex = (currentPage - 1) * rowsPerPage;
+                                          const endIndex = Math.min(startIndex + rowsPerPage, totalRows);
+                                          
+                                          // 创建当前页的行
+                                          const rows = [];
+                                          for (let rowIndex = startIndex; rowIndex < endIndex; rowIndex++) {
+                                            rows.push(
+                                              <tr key={rowIndex} className="hover:bg-purple-50 transition-colors">
+                                                <td className="px-4 py-3 text-sm text-gray-500 border-b border-gray-200 font-mono bg-purple-50 sticky left-0 z-10 min-w-[60px]">
+                                                  <div className="flex items-center justify-center">
+                                                    <span className="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-xs font-medium">
+                                                      {rowIndex + 1}
+                                                    </span>
+                                                  </div>
+                                                </td>
+                                                {referenceManualData.processed_data?.map((field, fieldIndex) => (
+                                                  <td key={fieldIndex} className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200 min-w-[150px] max-w-[250px]">
+                                                    <div className="group relative">
+                                                      <div 
+                                                        className="truncate cursor-help"
+                                                        title={field.values?.[rowIndex] || '-'}
+                                                      >
+                                                        {field.values?.[rowIndex] || '-'}
+                                                      </div>
+                                                    </div>
+                                                  </td>
+                                                ))}
+                                              </tr>
+                                            );
+                                          }
+                                          return rows;
+                                        })()}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                  
+                                  <div className="px-4 py-3 bg-purple-50 border-t border-purple-200 text-xs text-gray-600">
+                                    <div className="flex justify-between items-center">
+                                      <div className="flex items-center gap-2">
+                                        <span>第 {(currentPage - 1) * rowsPerPage + 1}-{Math.min(currentPage * rowsPerPage, referenceManualData.processed_data?.[0]?.values?.length || 0)} 行，共 {referenceManualData.processed_data?.[0]?.values?.length || 0} 行</span>
+                                        <span className="text-purple-600">✨ 已手动编辑</span>
+                                      </div>
+                                      
+                                      {/* 分页控制器 */}
+                                      <div className="flex items-center space-x-2">
+                                        <button
+                                          onClick={() => setCurrentPage(1)}
+                                          disabled={currentPage === 1}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          首页
+                                        </button>
+                                        <button
+                                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                          disabled={currentPage === 1}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          上一页
+                                        </button>
+                                        
+                                        <span className="text-sm">
+                                          {currentPage}/{Math.ceil((referenceManualData.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                        </span>
+                                        
+                                        <button
+                                          onClick={() => {
+                                            const maxPage = Math.ceil((referenceManualData.processed_data?.[0]?.values?.length || 0) / rowsPerPage);
+                                            setCurrentPage(prev => Math.min(prev + 1, maxPage));
+                                          }}
+                                          disabled={currentPage >= Math.ceil((referenceManualData.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          下一页
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            const maxPage = Math.ceil((referenceManualData.processed_data?.[0]?.values?.length || 0) / rowsPerPage);
+                                            setCurrentPage(maxPage);
+                                          }}
+                                          disabled={currentPage >= Math.ceil((referenceManualData.processed_data?.[0]?.values?.length || 0) / rowsPerPage)}
+                                          className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          末页
+                                        </button>
+                                        
+                                        <select
+                                          value={rowsPerPage}
+                                          onChange={(e) => {
+                                            const newRowsPerPage = parseInt(e.target.value, 10);
+                                            setRowsPerPage(newRowsPerPage);
+                                            // 调整当前页，确保不会超出范围
+                                            const maxPage = Math.ceil((referenceManualData.processed_data?.[0]?.values?.length || 0) / newRowsPerPage);
+                                            if (currentPage > maxPage) {
+                                              setCurrentPage(maxPage);
+                                            }
+                                          }}
+                                          className="ml-2 px-2 py-1 bg-white border border-gray-300 rounded text-sm"
+                                        >
+                                          <option value={10}>10行/页</option>
+                                          <option value={25}>25行/页</option>
+                                          <option value={50}>50行/页</option>
+                                          <option value={100}>100行/页</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
 
 
 
@@ -1415,373 +3734,14 @@ const QuestionnaireAnalysis = () => {
                         transition={{ duration: 0.3 }}
                       >
                       <div className="space-y-6">
-                          {/* 工作流程指引 */}
-                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              分析工作流程
-                            </h3>
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center space-x-3">
-                                <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
-                                <div className="text-sm">
-                                  <div className="font-medium text-gray-800">题型识别配置</div>
-                                  <div className="text-gray-600">查看字段分类</div>
-                                </div>
-                              </div>
-                              <div className="hidden md:flex items-center">
-                                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                              </div>
-                              <div className="flex items-center space-x-3">
-                                <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
-                                <div className="text-sm">
-                                  <div className="font-medium text-gray-800">数据打标</div>
-                                  <div className="text-gray-600">智能分类处理(若无开放题，则跳过打标)</div>
-                                </div>
-                              </div>
-                              <div className="hidden md:flex items-center">
-                                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                              </div>
-                              <div className="flex items-center space-x-3">
-                                <div className="flex-shrink-0 w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
-                                <div className="text-sm">
-                                  <div className="font-medium text-gray-800">统计分析</div>
-                                  <div className="text-gray-600">选择字段和分析</div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+
                         
                           <div className="bg-white rounded-xl border border-gray-300 p-6">
-                            <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                              <span className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
-                              题型识别与分析配置
-                            </h3>
-
-                      
-                            {/* Question Type Recognition Results */}
-                            {uploadInfo.questionTypes && (
-                              <div className="mb-6">
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                                  <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                                    <BarChart3 className="w-5 h-5" />
-                                    题型识别结果
-                                  </h4>
-                                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 text-sm">
-                                    <div className="text-center">
-                                      <div className="text-lg font-bold text-blue-600">
-                                        {uploadInfo.questionTypes?.scaleQuestions?.length || 0}
-                                      </div>
-                                      <div className="text-gray-600">量表题</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-lg font-bold text-orange-600">
-                                        {uploadInfo.questionTypes?.singleChoice?.length || 0}
-                                      </div>
-                                      <div className="text-gray-600">单选题</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-lg font-bold text-red-600">
-                                        {uploadInfo.questionTypes?.openEnded?.length || 0}
-                                      </div>
-                                      <div className="text-gray-600">开放题</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Debug Area - Show raw data structure */}
-                            <div className="mb-6">
-                              <details className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                <summary className="cursor-pointer font-semibold text-gray-700 mb-2">
-                                  📋 查看原始数据结构 (调试信息)
-                                </summary>
-                                <div className="mt-3 text-sm">
-                                  <h5 className="font-medium text-gray-800 mb-2">文件信息:</h5>
-                                  <pre className="bg-white p-3 rounded border text-xs overflow-x-auto">
-                                    {JSON.stringify({
-                                      filename: uploadInfo.filename,
-                                      fileSize: uploadInfo.fileSize,
-                                      rowCount: uploadInfo.rowCount,
-                                      columnCount: uploadInfo.columnCount,
-                                      analysisId: uploadInfo.analysisId
-                                    }, null, 2)}
-                                  </pre>
-
-                                  <h5 className="font-medium text-gray-800 mt-4 mb-2">列名列表:</h5>
-                                  <pre className="bg-white p-3 rounded border text-xs overflow-x-auto">
-                                    {JSON.stringify(uploadInfo.columns, null, 2)}
-                                  </pre>
-
-                                  <h5 className="font-medium text-gray-800 mt-4 mb-2">题型识别结果:</h5>
-                                  <pre className="bg-white p-3 rounded border text-xs overflow-x-auto">
-                                    {JSON.stringify(uploadInfo.questionTypes, null, 2)}
-                                  </pre>
-                                </div>
-                              </details>
-                            </div>
-
-  {/* 2. 开始打标按钮区域 */}
-  <div className="mt-8 pt-6 border-t border-gray-200">
-                              <div className="mb-4">
-                                <h4 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                                  <span className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
-                                  数据打标
-                                </h4>
-                                <p className="text-sm text-gray-600">
-                                  对上传的问卷数据进行智能分类和标签处理，识别问题类型并生成分析标签
-                                </p>
-                                <p className="text-sm text-blue-600 mt-1">
-                                  💡 若无开放题，则跳过打标
-                                </p>
-                              </div>
-
-                              {/* 字段选择状态提示 */}
-                              <div className="mb-4">
-                                {selectedFields.length > 0 ? (
-                                  <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 p-3 rounded-lg">
-                                    <CheckCircle className="w-4 h-4" />
-                                    <span>已准备处理 {selectedFields.length} 个字段</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2 text-sm text-orange-700 bg-orange-50 p-3 rounded-lg">
-                                    <AlertCircle className="w-4 h-4" />
-                                    <span>系统将自动处理所有开放性问题字段</span>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Classification错误显示 */}
-                              {classificationError && (
-                                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                                  <div className="flex items-center gap-2 text-red-800">
-                                    <AlertCircle className="w-4 h-4" />
-                                    <span className="font-medium">数据处理失败</span>
-                                  </div>
-                                  <div className="mt-1 text-sm text-red-700">{classificationError}</div>
-                                </div>
-                              )}
-
-                              {/* 开始打标按钮 */}
-                              <div className="flex justify-center">
-                                <button
-                                  className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-                                  onClick={handleClassification}
-                                  disabled={classificationLoading || !analysisId}
-                                >
-                                  {classificationLoading ? (
-                                    <>
-                                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                      <span>处理中...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                                      </svg>
-                                      <span>🏷️ 开始打标</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-
-                              {/* 打标进度条 */}
-                              {showTaggingProgress && (
-                                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200 shadow-sm">
-                                  <div className="flex justify-between items-center mb-2">
-                                    <h4 className="font-medium text-blue-800">打标进度</h4>
-                                    <span className="text-sm text-blue-700">{taggingProgress}%</span>
-                                  </div>
-                                  <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                    <div 
-                                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-in-out" 
-                                      style={{ width: `${taggingProgress}%` }}
-                                    ></div>
-                                  </div>
-                                  <p className="mt-2 text-sm text-blue-600">{taggingStatus}</p>
-                                </div>
-                              )}
-
-                              {/* 调试信息 */}
-                              <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                                <div>调试信息:</div>
-                                <div>analysisId: {analysisId || '未设置'}</div>
-                                <div>检测到字段: {uploadInfo?.columns?.length || 0} 个</div>
-                                <div>uploadInfo: {uploadInfo ? '已加载' : '未加载'}</div>
-                              </div>
-
-                              {/* Classification处理结果表格 */}
-                              {classificationResult && classificationResult.processed_data && (
-                                <div className="mt-8 pt-6 border-t border-gray-200">
-                                  <div className="mb-4">
-                                    <div className="flex justify-between items-center">
-                                      <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                                        <Table className="w-5 h-5 text-green-600" />
-                                        分类处理结果 (前10行预览)
-                                      </h4>
-                                      <button
-                                        onClick={downloadClassificationResult}
-                                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-                                      >
-                                        <Download className="w-4 h-4" />
-                                        下载完整结果
-                                      </button>
-                                    </div>
-                                    <p className="text-sm text-gray-600">
-                                      已完成开放性问题的智能分类处理，以下是处理后的数据预览
-                                    </p>
-                            </div>
-
-                                  {/* 处理结果摘要 */}
-                                  {classificationResult.summary && (
-                                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                                      <h5 className="font-semibold text-green-900 mb-2">处理摘要</h5>
-                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                        <div className="text-center">
-                                          <div className="text-lg font-bold text-green-600">{classificationResult.summary.total_responses || 0}</div>
-                                          <div className="text-gray-600">总响应数</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="text-lg font-bold text-blue-600">{classificationResult.summary.processed_fields || 0}</div>
-                                          <div className="text-gray-600">已处理字段</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="text-lg font-bold text-purple-600">
-                                            {classificationResult.processed_data ? Object.keys(classificationResult.processed_data).length : 0}
-                                          </div>
-                                          <div className="text-gray-600">处理字段数</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="text-lg font-bold text-orange-600">10</div>
-                                          <div className="text-gray-600">预览行数</div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* 数据表格 */}
-                                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                                    {/* 表格说明 */}
-                                    <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 text-sm text-blue-700">
-                                      <div className="flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <span>表格支持上下左右滚动查看完整数据 • 共 {Object.keys(classificationResult.processed_data).length} 个字段 • 显示前10行</span>
-                                      </div>
-                                    </div>
-                                    
-                                    {/* 可滚动表格容器 */}
-                                    <div className="overflow-auto max-h-96 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-                                      <table className="min-w-full border-collapse">
-                                        <thead className="bg-gray-50 sticky top-0 z-10">
-                                          <tr>
-                                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-300 bg-gray-50 sticky left-0 z-20 min-w-[60px]">
-                                              <div className="flex items-center">
-                                                <span className="text-xs text-gray-500">#</span>
-                                              </div>
-                                            </th>
-                                            {classificationResult.processed_data.map((item, index) => (
-                                                <th key={item.field} className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-300 bg-gray-50 min-w-[150px] max-w-[250px]">
-                                                  <div className="flex flex-col">
-                                                    <span className="truncate" title={item.field}>
-                                                      {item.field}
-                                                    </span>
-                                                    <span className="text-xs text-gray-500 font-normal">
-                                                      字段 {index + 1}
-                                                    </span>
-                                                  </div>
-                                                </th>
-                                             ))}
-                                          </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
-                                          {Array.from({ length: Math.min(10, classificationResult.sample_size || 10) }, (_, index) => (
-                                            <tr key={index} className="hover:bg-gray-50 transition-colors">
-                                              <td className="px-4 py-3 text-sm text-gray-500 border-b border-gray-200 font-mono bg-gray-50 sticky left-0 z-10 min-w-[60px]">
-                                                <div className="flex items-center justify-center">
-                                                  <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-medium">
-                                                    {index + 1}
-                                                  </span>
-                                                </div>
-                                              </td>
-                                              {classificationResult.processed_data.map((item) => (
-                                                <td key={item.field} className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200 min-w-[150px] max-w-[250px]">
-                                                  <div className="group relative">
-                                                    <div 
-                                                      className="truncate cursor-help"
-                                                      title={item.values[index] || '-'}
-                                                    >
-                                                      {item.values[index] || '-'}
-                                                    </div>
-                                                    {/* 悬停时显示完整内容 */}
-                                                    {item.values[index] && item.values[index].length > 20 && (
-                                                      <div className="invisible group-hover:visible absolute bottom-full left-0 z-30 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg transform -translate-y-1">
-                                                        <div className="break-words whitespace-pre-wrap">
-                                                          {item.values[index]}
-                                                        </div>
-                                                        <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                </td>
-                                              ))}
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                    
-                                    {/* 表格底部信息 */}
-                                    <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-600">
-                                      <div className="flex justify-between items-center">
-                                        <span>显示第 1-10 行，共 {classificationResult.sample_size || 10} 行数据预览</span>
-                                        <span>
-                                          字段数：{classificationResult.processed_data.length} 个
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* 表格说明 */}
-                                  <div className="mt-3 text-xs text-gray-600 bg-gray-50 p-3 rounded">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                      </svg>
-                                      <span className="font-medium">使用说明：</span>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-6">
-                                      <ul className="list-disc list-inside space-y-1">
-                                        <li>表格支持上下左右滚动查看完整数据</li>
-                                        <li>鼠标悬停在单元格上查看完整内容</li>
-                                        <li>第一列行号固定，方便对照</li>
-                                        <li>此预览仅显示前10行数据</li>
-                                      </ul>
-                                      <ul className="list-disc list-inside space-y-1">
-                                        <li>完整数据请点击"下载完整结果"按钮获取</li>
-                                        <li>处理后的数据包含了智能分类和翻译结果</li>
-                                        <li>每个开放性问题字段都经过了AI分析处理</li>
-                                        <li>字段总数显示在表格顶部和底部</li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
 
 
 
 
-
-
+                         
 
                             </div>
 
@@ -1816,6 +3776,8 @@ const QuestionnaireAnalysis = () => {
                             exit={{ opacity: 0, x: -20 }}
                             transition={{ duration: 0.3 }}
                           >
+                            {/* 已移除：标准AI打标结果和参考标签打标结果显示区域，现在这些结果只在功能选择页面下显示 */}
+
                             {/* 统计分析功能区域 */}
                             <div className="space-y-6 mb-8">
                               {/* 统计分析标题和说明 */}
@@ -1839,7 +3801,11 @@ const QuestionnaireAnalysis = () => {
                                     // 检查是否有开放题
                                     const openEndedCount = uploadInfo?.questionTypes?.openEnded?.length || 0;
                                     // 如果没有开放题，直接显示字段选择；如果有开放题，需要检查是否完成数据打标
-                                    return openEndedCount === 0 || (classificationResult && classificationResult.processed_data && classificationResult.processed_data.length > 0);
+                                    const hasClassificationResult = classificationResult && classificationResult.processed_data && classificationResult.processed_data.length > 0;
+                                    const hasStandardLabelingResult = standardLabelingResult && standardLabelingResult.processed_data && standardLabelingResult.processed_data.length > 0;
+                                    const hasReferenceLabelingResult = referenceLabelingResult && referenceLabelingResult.processed_data && referenceLabelingResult.processed_data.length > 0;
+                                    
+                                    return openEndedCount === 0 || hasClassificationResult || hasStandardLabelingResult || hasReferenceLabelingResult;
                                   })() ? (
                                     <div className="space-y-3">
                                       <div className="text-sm text-gray-600 mb-3">
@@ -1852,14 +3818,15 @@ const QuestionnaireAnalysis = () => {
                                           console.log('渲染字段选择区域，当前groupedFields:', groups);
                                           
                                           // 确保所有打标后的字段都被包含
-                                          if (classificationResult && classificationResult.processed_data) {
+                                            const currentResult = standardLabelingResult || referenceLabelingResult || classificationResult;
+                                            if (currentResult && currentResult.processed_data) {
                                             console.log('检查打标后的字段是否都已包含');
                                             
                                             // 创建一个临时Map来存储所有字段
                                             const allFieldsMap = new Map(groupedFields);
                                             
                                             // 处理打标后的数据，确保所有字段都被包含
-                                            classificationResult.processed_data.forEach(item => {
+                                              currentResult.processed_data.forEach(item => {
                                               if (!item.field) return;
                                               
                                               // 检查这个字段是否已经在任何现有组中
@@ -2507,6 +4474,128 @@ const QuestionnaireAnalysis = () => {
           </div>
         </div>
       </div>
+      
+      {/* 标签编辑器 */}
+      {showTagEditor && analysisId && (
+        <TagEditor
+          analysisId={analysisId}
+          refreshTrigger={refreshTrigger}
+          editType={activeMode === 'standard' ? 'ai' : activeMode === 'reference' ? 'custom' : 'mixed'}
+          onClose={() => {
+            console.log('关闭标签编辑器');
+            setShowTagEditor(false);
+          }}
+          onDataUpdate={(data) => {
+            console.log('标签编辑器数据更新，字段数量:', data?.processed_data?.length || 0);
+            
+            // 根据当前活动模式设置对应的手动编辑数据
+            if (activeMode === 'standard') {
+              setStandardManualData(data);
+            } else if (activeMode === 'reference') {
+              setReferenceManualData(data);
+            } else {
+              // 向后兼容，如果没有设置activeMode，使用原有逻辑
+              setStandardManualData(data);
+            }
+            setHasStartedManualEdit(true);
+            
+            // 强制关闭TagEditor以显示结果
+            setShowTagEditor(false);
+          }}
+        />
+      )}
+      {showTagEditor && !analysisId && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-bold mb-4">错误</h2>
+            <p>analysisId未设置，无法打开标签编辑器</p>
+            <button
+              onClick={() => setShowTagEditor(false)}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 数据库导入对话框 */}
+      {showDatabaseDialog && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-96">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Database className="w-5 h-5" />
+              保存到数据库
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  问卷主题 (可选)
+                </label>
+                <input
+                  type="text"
+                  value={surveyTopic}
+                  onChange={(e) => setSurveyTopic(e.target.value)}
+                  placeholder="请输入问卷主题或用途"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div className="bg-gray-50 p-3 rounded-md">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">导入信息：</h3>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• 数据库：mkt</li>
+                  <li>• 表：questionnaire_final_results</li>
+                  <li>• 分析ID：{analysisId}</li>
+                  {databaseStatus.imported && (
+                    <li>• 上次导入：{databaseStatus.recordCount} 条记录</li>
+                  )}
+                </ul>
+              </div>
+              
+              {databaseStatus.imported && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                  <p className="text-sm text-yellow-800">
+                    ⚠️ 该分析已存在于数据库中，重新导入将覆盖现有数据
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowDatabaseDialog(false)}
+                className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleImportToDatabase}
+                disabled={databaseStatus.importing}
+                className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                  databaseStatus.importing 
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                {databaseStatus.importing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    导入中...
+                  </>
+                ) : (
+                  <>
+                    <Database className="w-4 h-4" />
+                    确认导入
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

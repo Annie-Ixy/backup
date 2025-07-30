@@ -31,14 +31,20 @@ except ImportError:
 app = Flask(__name__)
 CORS(app)  # 允许跨域请求
 
-# 文件上传配置
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '../uploads/questionnaire')
+# 文件上传配置及子目录
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+QUESTIONNAIRE_FOLDER = os.path.join(UPLOAD_FOLDER, 'questionnaire')
+CLASSIFICATION_FOLDER = os.path.join(UPLOAD_FOLDER, 'classification')
+RETAG_FOLDER = os.path.join(UPLOAD_FOLDER, 'retag_result')
 ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls', 'txt'}
 
 # 确保上传目录存在
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(QUESTIONNAIRE_FOLDER, exist_ok=True)
+os.makedirs(CLASSIFICATION_FOLDER, exist_ok=True)
+os.makedirs(RETAG_FOLDER, exist_ok=True)
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['UPLOAD_FOLDER'] = QUESTIONNAIRE_FOLDER  # 配置指向问卷文件夹
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # 存储分析结果的内存数据结构
@@ -293,11 +299,11 @@ class UniversalQuestionnaireAnalyzer:
         if is_keyword_match:
             return True, keyword_reason
         
-        # 步骤4：检查选项数量范围（1-10个即判定为单选题）
-        if 1 <= unique_count <= 10:
-            return True, f"选项数量特征({unique_count}个选项在1-10范围内)"
+        # 步骤4：检查选项数量范围（1-8个即判定为单选题）
+        if 1 <= unique_count <= 8:
+            return True, f"选项数量特征({unique_count}个选项在1-8范围内)"
         
-        return False, f"选项数量超出范围(需要1-10个，实际{unique_count}个)"
+        return False, f"选项数量超出范围(需要1-8个，实际{unique_count}个)"
     
     def identify_all_question_types(self, df):
         """识别所有题型 - 新的三步判断法"""

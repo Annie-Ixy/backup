@@ -29,16 +29,16 @@ module.exports = function(app) {
       logLevel: 'debug',
     })
   );
-    // 用户认证API代理
+    // 问卷分析Python API代理
     app.use(
       '/dev-api-py',
       createProxyMiddleware({
         target: 'http://localhost:9001',
         changeOrigin: true,
         pathRewrite: {
-          '^/dev-api': '', // 移除 /dev-api 前缀
+          '^/dev-api-py': '', // 移除 /dev-api-py 前缀
         },
-        secure: true,
+        secure: false,
         logLevel: 'debug',
       })
     );
