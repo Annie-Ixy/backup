@@ -79,10 +79,10 @@ analysis_results = {}
 
 # 数据库连接配置
 DB_CONFIG = {
-    'host': os.getenv('TIDB_HOST') or '10.51.32.12',
-    'port': int(os.getenv('TIDB_PORT') or 4000),
-    'user': os.getenv('TIDB_USER') or 'root',
-    'password': os.getenv('TIDB_PASSWORD') or 'Z8OiMjawmSSqgRFs',
+    'host': os.getenv('TIDB_HOST') or 'xx',
+    'port': int(os.getenv('TIDB_PORT') or 8000),
+    'user': os.getenv('TIDB_USER') or 'xx',
+    'password': os.getenv('TIDB_PASSWORD') or 'xx',
     'database': 'mkt',
     'charset': 'utf8mb4',
     'ssl_disabled': False
