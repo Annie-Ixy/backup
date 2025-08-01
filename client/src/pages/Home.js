@@ -16,7 +16,7 @@ import {
   TrendingUp,
   ClipboardList
 } from 'lucide-react';
-import { isLogin } from '../utils/index.ts';
+// import { isLogin } from '../utils/index.ts';
 
   function Home() {
     const isLoginChecked = useRef(false);
