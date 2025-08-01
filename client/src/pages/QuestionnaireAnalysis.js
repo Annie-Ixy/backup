@@ -2976,7 +2976,7 @@ App交互体验：软件用户界面及交互的易用性
                                     </div>
                                   </div>
                                   
-                                  <div className="overflow-auto max-h-96">
+                                  <div className="overflow-auto max-h-100">
                                     <table className="w-full divide-y divide-gray-200">
                                       <thead className="bg-gray-50 sticky top-0 z-20">
                                         <tr>
@@ -3171,7 +3171,7 @@ App交互体验：软件用户界面及交互的易用性
                                     </div>
                                   </div>
                                   
-                                  <div className="overflow-auto max-h-96">
+                                  <div className="overflow-auto max-h-100">
                                     <table className="w-full divide-y divide-gray-200">
                                       <thead className="bg-orange-50 sticky top-0 z-20">
                                         <tr>
@@ -3377,7 +3377,7 @@ App交互体验：软件用户界面及交互的易用性
                                     </div>
                                   </div>
                                   
-                                  <div className="overflow-auto max-h-96">
+                                  <div className="overflow-auto max-h-100">
                                     <table className="w-full divide-y divide-gray-200">
                                       <thead className="bg-gray-50 sticky top-0 z-20">
                                         <tr>
@@ -3577,7 +3577,7 @@ App交互体验：软件用户界面及交互的易用性
                                     </div>
                                   </div>
                                   
-                                  <div className="overflow-auto max-h-96">
+                                  <div className="overflow-auto max-h-100">
                                     <table className="w-full divide-y divide-gray-200">
                                       <thead className="bg-purple-50 sticky top-0 z-20">
                                         <tr>

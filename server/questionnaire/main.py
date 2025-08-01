@@ -833,190 +833,6 @@ def handle_standard_labeling():
         logger.error(f"❌ 标准AI打标请求处理失败: {e}")
         return jsonify({'error': f'标准AI打标请求处理失败: {str(e)}'}), 500
 
-# # 处理Classification分析 开始分析 (保持向后兼容)
-# @app.route('/classification', methods=['POST'])
-# def handle_classification():
-#     """处理Classification分析"""
-#     try:
-#         logger.info("🔍 收到Classification处理请求")
-        
-#         data = request.get_json()
-#         analysis_id = data.get('analysisId')
-#         selected_fields = data.get('selectedFields', [])
-        
-#         if not analysis_id or analysis_id not in analysis_results:
-#             return jsonify({'error': '无效的分析ID'}), 400
-        
-#         # 注意：选择字段检查被注释掉是为了允许处理所有字段
-#         # if not selected_fields:
-#         #     return jsonify({'error': '请选择要分析的字段'}), 400
-        
-#         analysis_info = analysis_results[analysis_id]
-#         input_file = analysis_info['file_path']
-        
-#         logger.info(f"📊 开始Classification处理，文件: {input_file}")
-        
-#         try:
-#             # 导入classification模块
-#             try:
-#                 from classification import QuestionnaireTranslationClassifier
-#                 logger.info("✅ 成功导入 QuestionnaireTranslationClassifier")
-#             except ImportError as e:
-#                 logger.error(f"❌ 导入 QuestionnaireTranslationClassifier 失败: {e}")
-#                 return jsonify({'error': f'导入 classification 模块失败: {str(e)}'}), 500
-            
-#             classifier = QuestionnaireTranslationClassifier()
-            
-#             # 生成输出文件路径到classification子目录
-#             # 从原始文件路径提取基础信息
-#             base_name, original_timestamp = extract_file_info(input_file)
-#             output_file = CLASSIFICATION_FOLDER / f"{base_name}_class_{original_timestamp}.xlsx"
-            
-#             # 执行classification处理
-#             logger.info(f"🔧 开始执行classification处理: {input_file} -> {output_file}")
-#             logger.info(f"📋 输入文件存在: {Path(input_file).exists()}")
-#             logger.info(f"📋 输入文件大小: {Path(input_file).stat().st_size if Path(input_file).exists() else 'N/A'} bytes")
-            
-#             try:
-#                 logger.info("🚀 即将调用 classifier.process_table 方法")
-#                 success = classifier.process_table(input_file, str(output_file))
-#                 logger.info(f"🔧 classifier.process_table 返回结果: {success}")
-#                 logger.info(f"📋 输出文件存在: {Path(output_file).exists()}")
-#                 if Path(output_file).exists():
-#                     logger.info(f"📋 输出文件大小: {Path(output_file).stat().st_size} bytes")
-                
-#                 if not success:
-#                     logger.error("❌ classifier.process_table 返回 False")
-#                     return jsonify({'error': 'Classification处理失败 - process_table返回False'}), 500
-                    
-#             except Exception as process_error:
-#                 logger.error(f"❌ classifier.process_table 执行时发生异常: {process_error}")
-#                 logger.error(f"❌ 异常类型: {type(process_error)}")
-#                 import traceback
-#                 logger.error(f"❌ 异常堆栈: {traceback.format_exc()}")
-#                 return jsonify({'error': f'Classification处理异常: {str(process_error)}'}), 500
-            
-#             logger.info(f"✅ Classification处理完成: {output_file}")
-            
-#             # 读取处理后的文件
-#             processed_df = pd.read_excel(str(output_file))
-            
-#             # 筛选选中的字段（如果存在）
-#             available_fields = [col for col in processed_df.columns if col in selected_fields or col in [col.replace('_翻译', '') for col in selected_fields]]
-#             if not available_fields:
-#                 # 如果没有找到匹配的字段，使用所有字段
-#                 available_fields = processed_df.columns.tolist()
-            
-#             # 生成处理结果
-#             result = {
-#                 'summary': {
-#                     'total_responses': len(processed_df),
-#                     'processed_fields': len(available_fields),
-#                     'processing_time': datetime.now().isoformat(),
-#                     'output_file': str(output_file)
-#                 },
-#                 'processed_data': {},
-#                 'field_analysis': {},
-#                 'sample_size': min(10, len(processed_df))
-#             }
-            
-#             # 准备处理后的数据（前10行）- 转换为数组格式
-#             result['processed_data'] = []
-            
-#             # 读取处理后的文件并识别题型
-#             try:
-#                 from universal_questionnaire_analyzer import UniversalQuestionnaireAnalyzer
-#                 logger.info("✅ 成功导入 UniversalQuestionnaireAnalyzer")
-#             except ImportError as e:
-#                 logger.error(f"❌ 导入 UniversalQuestionnaireAnalyzer 失败: {e}")
-#                 return jsonify({'error': f'导入分析模块失败: {str(e)}'}), 500
-            
-#             analyzer = UniversalQuestionnaireAnalyzer()
-#             question_types = analyzer.identify_all_question_types(processed_df)
-            
-#             # 打印题型识别结果
-#             logger.info("题型识别结果:")
-#             logger.info(f"单选题: {question_types.get('single_choice', [])}")
-#             logger.info(f"量表题: {question_types.get('scale_questions', [])}")
-#             logger.info(f"开放题: {question_types.get('open_ended', [])}")
-            
-#             # 创建字段到类型的映射
-#             field_type_map = {}
-            
-#             # 1. 处理单选题 (type: 0)
-#             for q in question_types.get('single_choice', []):
-#                 if isinstance(q, dict) and 'column' in q:
-#                     field_type_map[q['column']] = 0
-            
-#             # 2. 处理量表题 (type: 1)
-#             for q in question_types.get('scale_questions', []):
-#                 if isinstance(q, dict) and 'column' in q:
-#                     field_type_map[q['column']] = 1
-            
-#             # 3. 处理开放题 (type: 2)
-#             for q in question_types.get('open_ended', []):
-#                 if isinstance(q, dict) and 'column' in q:
-#                     field_type_map[q['column']] = 2
-            
-#             # 新逻辑中无其他题型，所有字段都已被分类
-
-
-            
-#             for col in available_fields:
-#                 if col in processed_df.columns:
-#                     result['processed_data'].append({
-#                         'field': col,
-#                         'values': processed_df[col].head(10).fillna('').astype(str).tolist(),
-#                         'type': field_type_map.get(col)  # 如果字段没有被分类，将返回 None
-#                     })
-            
-#             # 为每个字段生成详细分析
-#             for field in available_fields:
-#                 if field in processed_df.columns:
-#                     field_data = processed_df[field]
-#                     field_data_clean = field_data.dropna()
-                    
-#                     if len(field_data_clean) > 0:
-#                         # 获取样本数据
-#                         sample_data = field_data_clean.head(10).tolist()
-                        
-#                         # 获取唯一值数量
-#                         unique_count = len(field_data_clean.unique())
-                        
-#                         # 如果是翻译字段，尝试提取主要主题
-#                         main_topics = []
-#                         if '_翻译' in field or '_标签' in field:
-#                             # 从数据中提取前5个最常见的值作为主题
-#                             value_counts = field_data_clean.value_counts().head(5)
-#                             main_topics = value_counts.index.tolist()
-                        
-#                         result['field_analysis'][field] = {
-#                             'response_count': len(field_data_clean),
-#                             'unique_values': unique_count,
-#                             'sample_data': sample_data,
-#                             'main_topics': main_topics
-#                         }
-            
-#             # 存储处理结果
-#             analysis_results[analysis_id]['classification_result'] = result
-#             analysis_results[analysis_id]['classification_output'] = str(output_file)
-            
-#             logger.info(f"✅ Classification处理完成，分析ID: {analysis_id}")
-#             return jsonify(convert_pandas_types(result))
-            
-#         except Exception as e:
-#             logger.error(f"❌ Classification处理失败: {e}")
-#             logger.error(f"❌ 异常类型: {type(e)}")
-#             import traceback
-#             logger.error(f"❌ 异常堆栈: {traceback.format_exc()}")
-#             return jsonify({'error': f'Classification处理失败: {str(e)}'}), 500
-            
-#     except Exception as e:
-#         logger.error(f"❌ Classification请求处理失败: {e}")
-#         logger.error(f"❌ 异常类型: {type(e)}")
-#         import traceback
-#         logger.error(f"❌ 异常堆栈: {traceback.format_exc()}")
-#         return jsonify({'error': f'Classification请求处理失败: {str(e)}'}), 500
 
 @app.route('/retag-with-reference', methods=['POST'])
 def retag_with_reference():
@@ -1470,32 +1286,6 @@ def export_results(analysis_id):
         logger.error(f"❌ 导出失败: {e}")
         return jsonify({'error': f'导出失败: {str(e)}'}), 500
 
-# @app.route('/download-classification/<analysis_id>', methods=['GET'])
-# def download_classification(analysis_id):
-#     """下载Classification处理后的文件"""
-#     try:
-#         if analysis_id not in analysis_results:
-#             return jsonify({'error': '分析ID不存在'}), 404
-        
-#         analysis_info = analysis_results[analysis_id]
-#         classification_output = analysis_info.get('classification_output')
-        
-#         if not classification_output or not os.path.exists(classification_output):
-#             return jsonify({'error': 'Classification处理结果文件不存在'}), 404
-        
-#         # 使用实际文件名而不是硬编码的名称
-#         actual_filename = Path(classification_output).name
-        
-#         return send_file(
-#             classification_output,
-#             as_attachment=True,
-#             download_name=actual_filename,
-#             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-#         )
-        
-#     except Exception as e:
-#         logger.error(f"❌ 下载Classification结果失败: {e}")
-#         return jsonify({'error': f'下载Classification结果失败: {str(e)}'}), 500
 
 @app.route('/get-ai-tags-for-editing/<analysis_id>', methods=['GET'])
 def get_ai_tags_for_editing(analysis_id):
@@ -2400,70 +2190,6 @@ def download_custom_manual_result(analysis_id):
         logger.error(f"❌ 下载参考标签手动编辑结果失败: {e}")
         return jsonify({'error': f'下载参考标签手动编辑结果失败: {str(e)}'}), 500
 
-# @app.route('/download-retag/<analysis_id>', methods=['GET'])
-# def download_retag(analysis_id):
-#     """下载重新打标处理后的文件"""
-#     try:
-#         if analysis_id not in analysis_results:
-#             return jsonify({'error': '分析ID不存在'}), 404
-        
-#         analysis_info = analysis_results[analysis_id]
-#         # 优先使用新的参考标签打标输出文件
-#         retag_output = analysis_info.get('custom_labeling_output')
-#         if not retag_output or not os.path.exists(retag_output):
-#             # 向后兼容：尝试使用旧的字段名
-#             retag_output = analysis_info.get('retag_output')
-#             if not retag_output or not os.path.exists(retag_output):
-#                 return jsonify({'error': '重新打标结果文件不存在'}), 404
-        
-#         # 使用实际文件名而不是硬编码的名称
-#         actual_filename = Path(retag_output).name
-        
-#         return send_file(
-#             retag_output,
-#             as_attachment=True,
-#             download_name=actual_filename,
-#             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-#         )
-        
-#     except Exception as e:
-#         logger.error(f"❌ 下载重新打标结果失败: {e}")
-#         return jsonify({'error': f'下载重新打标结果失败: {str(e)}'}), 500
-
-# @app.route('/download-final-result/<analysis_id>', methods=['GET'])
-# def download_final_result(analysis_id):
-#     """下载最终结果文件（手动修改后的文件）"""
-#     try:
-#         if analysis_id not in analysis_results:
-#             return jsonify({'error': '分析ID不存在'}), 404
-        
-#         analysis_info = analysis_results[analysis_id]
-        
-#         # 优先使用手动修改后的文件
-#         final_output = analysis_info.get('manual_output')
-#         if final_output and os.path.exists(final_output):
-#             actual_filename = Path(final_output).name
-#             logger.info(f"📥 下载手动修改后的文件: {actual_filename}")
-#         else:
-#             # 如果没有手动修改，使用重新打标的文件
-#             final_output = analysis_info.get('retag_output')
-#             if final_output and os.path.exists(final_output):
-#                 actual_filename = Path(final_output).name
-#                 logger.info(f"📥 下载重新打标的文件: {actual_filename}")
-#             else:
-#                 return jsonify({'error': '最终结果文件不存在'}), 404
-        
-#         return send_file(
-#             final_output,
-#             as_attachment=True,
-#             download_name=actual_filename,
-#             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-#         )
-        
-#     except Exception as e:
-#         logger.error(f"❌ 下载最终结果失败: {e}")
-#         return jsonify({'error': f'下载最终结果失败: {str(e)}'}), 500
-
 @app.route('/get-modification-history/<analysis_id>', methods=['GET'])
 def get_modification_history(analysis_id):
     """获取修改历史记录"""
@@ -2490,7 +2216,7 @@ def get_modification_history(analysis_id):
         logger.error(f"❌ 获取修改历史失败: {e}")
         return jsonify({'error': f'获取修改历史失败: {str(e)}'}), 500
 
-@app.route('/test/analysis-history', methods=['GET'])
+@app.route('/analysis-history', methods=['GET'])
 def get_analysis_history():
     """获取分析历史"""
     try:
@@ -2519,7 +2245,7 @@ def health_check():
     })
 
 # 数据库相关API接口
-@app.route('/test-database-connection', methods=['GET'])
+@app.route('/database-connection', methods=['GET'])
 def test_db_connection():
     """测试数据库连接接口"""
     try:
@@ -2725,15 +2451,7 @@ def save_ai_manual_tags(analysis_id):
         standard_labeling_output = analysis_info.get('standard_labeling_output')
         manual_ai_output = analysis_info.get('manual_ai_output')
         
-        # 删除之前的AI手动编辑文件（如果存在）
-        if manual_ai_output and os.path.exists(manual_ai_output):
-            try:
-                os.remove(manual_ai_output)
-                logger.info(f"🗑️ 删除之前的AI手动编辑文件: {manual_ai_output}")
-            except Exception as e:
-                logger.warning(f"⚠️ 删除之前的AI手动编辑文件失败: {e}")
-        
-        # 确定当前读取文件
+        # 确定当前读取文件（优先读取已有的手动编辑文件）
         if manual_ai_output and os.path.exists(manual_ai_output):
             current_file = manual_ai_output
             logger.info(f"📁 AI打标手动修改基于已有手动修改文件: {current_file}")
@@ -2743,9 +2461,16 @@ def save_ai_manual_tags(analysis_id):
         else:
             return jsonify({'error': '没有找到AI打标结果文件'}), 404
         
-        # 生成保存路径到translate_ai_manual目录，使用原始时间戳保持一致性
-        base_name, original_timestamp = extract_file_info(current_file)
-        output_file = TRANSLATE_AI_MANUAL_FOLDER / f"{base_name}_ai_manual_{original_timestamp}.xlsx"
+        # 确定输出文件路径
+        if current_file == manual_ai_output:
+            # 当前读取的就是手动编辑文件，直接覆盖
+            output_file = current_file
+            logger.info(f"📝 覆盖已有AI手动编辑文件: {output_file}")
+        else:
+            # 当前读取的是原始AI打标文件，创建新的手动编辑文件
+            base_name, original_timestamp = extract_file_info(current_file)
+            output_file = TRANSLATE_AI_MANUAL_FOLDER / f"{base_name}_ai_manual_{original_timestamp}.xlsx"
+            logger.info(f"📝 创建新的AI手动编辑文件: {output_file}")
         
         return _save_manual_tags_common(analysis_id, current_file, str(output_file), modifications, 'manual_ai_output', "AI打标手动修改")
         
@@ -2772,15 +2497,7 @@ def save_custom_manual_tags(analysis_id):
         custom_labeling_output = analysis_info.get('custom_labeling_output')
         manual_custom_output = analysis_info.get('manual_custom_output')
         
-        # 删除之前的参考标签手动编辑文件（如果存在）
-        if manual_custom_output and os.path.exists(manual_custom_output):
-            try:
-                os.remove(manual_custom_output)
-                logger.info(f"🗑️ 删除之前的参考标签手动编辑文件: {manual_custom_output}")
-            except Exception as e:
-                logger.warning(f"⚠️ 删除之前的参考标签手动编辑文件失败: {e}")
-        
-        # 确定当前读取文件
+        # 确定当前读取文件（优先读取已有的手动编辑文件）
         if manual_custom_output and os.path.exists(manual_custom_output):
             current_file = manual_custom_output
             logger.info(f"📁 参考标签手动修改基于已有手动修改文件: {current_file}")
@@ -2799,9 +2516,16 @@ def save_custom_manual_tags(analysis_id):
             except Exception:
                 return jsonify({'error': '没有找到参考标签打标结果文件'}), 404
         
-        # 生成保存路径到translate_custom_manual目录，使用原始时间戳保持一致性
-        base_name, original_timestamp = extract_file_info(current_file)
-        output_file = TRANSLATE_CUSTOM_MANUAL_FOLDER / f"{base_name}_custom_manual_{original_timestamp}.xlsx"
+        # 确定输出文件路径
+        if current_file == manual_custom_output:
+            # 当前读取的就是手动编辑文件，直接覆盖
+            output_file = current_file
+            logger.info(f"📝 覆盖已有参考标签手动编辑文件: {output_file}")
+        else:
+            # 当前读取的是原始参考标签打标文件，创建新的手动编辑文件
+            base_name, original_timestamp = extract_file_info(current_file)
+            output_file = TRANSLATE_CUSTOM_MANUAL_FOLDER / f"{base_name}_custom_manual_{original_timestamp}.xlsx"
+            logger.info(f"📝 创建新的参考标签手动编辑文件: {output_file}")
         
         return _save_manual_tags_common(analysis_id, current_file, str(output_file), modifications, 'manual_custom_output', "参考标签手动修改")
         
