@@ -41,7 +41,7 @@ import Toast from '../components/Toast';
 import TagEditor from '../components/TagEditor';
 import LoadingScreen from '../components/LoadingScreen';
 
-import { isLogin } from '../utils/index.ts';
+// import { isLogin } from '../utils/index.ts';
 
 const QuestionnaireAnalysis = () => {
   const navigate = useNavigate();
@@ -158,14 +158,14 @@ const QuestionnaireAnalysis = () => {
   let isLoginIndex = 0;
 
   useEffect(() => {
-    if (isLoginIndex === 0) {
-      isLoginIndex++;
-      isLogin().then(res => {
-        if (!res) {
-          navigate('/login');
-        }
-      })
-    }
+    // if (isLoginIndex === 0) {
+    //   isLoginIndex++;
+    //   isLogin().then(res => {
+    //     if (!res) {
+    //       navigate('/login');
+    //     }
+    //   })
+    // }
   }, [navigate]);
 
   // 监控页面切换和分类结果变化，清理不匹配的字段选择
