@@ -29,4 +29,17 @@ module.exports = function(app) {
       logLevel: 'debug',
     })
   );
-}; 
+    // 问卷分析Python API代理
+    app.use(
+      '/dev-api-py',
+      createProxyMiddleware({
+        target: 'http://localhost:9001',
+        changeOrigin: true,
+        pathRewrite: {
+          '^/dev-api-py': '', // 移除 /dev-api-py 前缀
+        },
+        secure: false,
+        logLevel: 'debug',
+      })
+    );
+};

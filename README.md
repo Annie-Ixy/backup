@@ -22,6 +22,7 @@ AI驱动的简历筛选和候选人排名系统，专为HRBP部门设计，能�
 
 ### 后端
 - **Node.js + Express**: 后端API服务
+- **Python3+**: 后端API服务 
 - **OpenAI GPT-4**: AI简历分析
 - **PDF-Parse**: PDF文件解析
 - **Yauzl**: ZIP文件处理
@@ -32,7 +33,7 @@ AI驱动的简历筛选和候选人排名系统，专为HRBP部门设计，能�
 - Node.js 16+
 - npm 或 yarn
 - OpenAI API Key
-
+- 本地需要开VPN并且：假设你已经有代理工具运行在本地（如 ClashX、Surge、V2ray、Shadowsocks 等），监听 HTTP 代理端口 127.0.0.1:7890：代理端口执行ssh：export https_proxy=http://127.0.0.1:7890
 ## 🔧 安装配置
 
 ### 1. 克隆项目
@@ -58,7 +59,7 @@ npm run install-all
 OPENAI_API_KEY=your_openai_api_key_here
 
 # 服务器配置
-PORT=5000
+PORT=9000
 NODE_ENV=development
 ```
 

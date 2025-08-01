@@ -1,4 +1,4 @@
-const fs = require('fs').promises;
+const fs = require('fs-extra');
 const path = require('path');
 const xlsx = require('xlsx');
 const sharp = require('sharp');
