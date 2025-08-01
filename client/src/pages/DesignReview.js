@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import DesignFileUpload from '../components/DesignFileUpload';
 import { designReviewApiService } from '../services/designReviewApi';
-import { isLogin } from '../utils/index.ts';
+// import { isLogin } from '../utils/index.ts';
 
 function DesignReview() {
   const navigate = useNavigate();
@@ -38,14 +38,14 @@ function DesignReview() {
   let isLoginIndex = 0;
   
   useEffect(() => {
-    if (isLoginIndex === 0) {
-      isLoginIndex++;
-      isLogin().then(res => {
-        if (!res) {
-          navigate('/login');
-        }
-      })
-    }
+    // if (isLoginIndex === 0) {
+    //   isLoginIndex++;
+    //   isLogin().then(res => {
+    //     if (!res) {
+    //       navigate('/login');
+    //     }
+    //   })
+    // }
     loadConfig();
   }, [navigate]);
 

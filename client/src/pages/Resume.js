@@ -6,7 +6,7 @@ import CandidateRanking from '../components/CandidateRanking';
 import LoadingScreen from '../components/LoadingScreen';
 import { Award, Upload, Users, TrendingUp, LogOut, User, ArrowLeft } from 'lucide-react';
 import api from '../utils/request';
-import { isLogin } from '../utils/index.ts';
+// import { isLogin } from '../utils/index.ts';
 
 function Resume() {
   const [currentView, setCurrentView] = useState('upload');
@@ -27,13 +27,13 @@ function Resume() {
   // Poll for results when jobId is set
   useEffect(() => {
     if (isLoginIndex === 0) {
-      isLoginIndex++;
-      isLogin().then(res => {
-        if (!res) {
-          sessionStorage.removeItem('token');
-          navigate('/login');
-        }
-      })
+      // isLoginIndex++;
+      // isLogin().then(res => {
+      //   if (!res) {
+      //     sessionStorage.removeItem('token');
+      //     navigate('/login');
+      //   }
+      // })
     }
     if (!jobId) return;
 
