@@ -8,7 +8,7 @@ if (window.location.hostname === 'localhost') {
  // Python后端端口
 const questionnaireRequest = axios.create({
   baseURL, 
-  timeout: 60 * 60 * 1000, // 请求超时时间
+  timeout: 120 * 60 * 1000, // 请求超时时间
   headers: {
     'Content-Type': 'application/json',
   },
@@ -57,14 +57,18 @@ export const questionnaireApi = {
     });
   },
 
-  // 翻译开放题 (新增)
-  translateOpenQuestions: (analysisId) => questionnaireRequest.post('/translate-open-questions', {
-    analysisId
-  }, {
-    headers: {
-      'Content-Type': 'application/json'
-    },
-  }),
+  // 翻译开放题 (修改为支持选择字段)
+  translateOpenQuestions: (analysisId, selectedFields = null) => {
+    const requestData = { analysisId };
+    if (selectedFields && selectedFields.length > 0) {
+      requestData.selectedFields = selectedFields;
+    }
+    return questionnaireRequest.post('/translate-open-questions', requestData, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    });
+  },
 
   // 标准AI打标 (新增)
   standardLabeling: (analysisId) => questionnaireRequest.post('/standard-labeling', {

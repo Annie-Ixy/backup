@@ -16,7 +16,7 @@ const TagEditor = ({ analysisId, onClose, onDataUpdate, refreshTrigger, editType
   const [batchTargetTag, setBatchTargetTag] = useState('');
   const [batchReplacementTag, setBatchReplacementTag] = useState('');
 
-  const itemsPerPage = 20;
+  const itemsPerPage = 50; // 合理的分页大小，支持翻页浏览
 
   useEffect(() => {
     loadTagData();
@@ -37,6 +37,11 @@ const TagEditor = ({ analysisId, onClose, onDataUpdate, refreshTrigger, editType
       }
     }
   }, [selectedQuestion, tagData]);
+
+  // 当搜索词或选择的问题变化时，重置分页到第1页
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedQuestion]);
 
   const loadTagData = async () => {
     try {
@@ -332,9 +337,9 @@ const TagEditor = ({ analysisId, onClose, onDataUpdate, refreshTrigger, editType
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg max-w-7xl w-full max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-lg shadow-lg max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden">
         {/* 标题栏 */}
-        <div className="flex items-center justify-between p-4 bg-blue-500 text-white">
+        <div className="flex items-center justify-between p-4 bg-blue-500 text-white flex-shrink-0">
           <h2 className="text-xl font-bold">标签编辑器</h2>
           <div className="flex items-center gap-2">
             <button
@@ -363,7 +368,7 @@ const TagEditor = ({ analysisId, onClose, onDataUpdate, refreshTrigger, editType
         </div>
 
         {/* 工具栏 */}
-        <div className="p-4 border-b bg-gray-50">
+        <div className="p-4 border-b bg-gray-50 flex-shrink-0">
           <div className="flex flex-wrap gap-4 items-center">
             {/* 搜索 */}
             <div className="flex-1 min-w-64">
@@ -501,7 +506,7 @@ const TagEditor = ({ analysisId, onClose, onDataUpdate, refreshTrigger, editType
         </div>
 
         {/* 数据表格 */}
-        <div className="overflow-auto max-h-[60vh]">
+        <div className="flex-1 overflow-auto">
           <table className="w-full border-collapse">
             <thead className="bg-gray-50 sticky top-0">
               <tr>
@@ -666,27 +671,55 @@ const TagEditor = ({ analysisId, onClose, onDataUpdate, refreshTrigger, editType
         </div>
 
         {/* 分页 */}
-        <div className="p-4 border-t bg-gray-50 flex justify-between items-center">
+        <div className="p-4 border-t bg-gray-50 flex justify-between items-center flex-shrink-0">
           <div className="text-sm text-gray-600">
             显示 {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredData.length)} 条，共 {filteredData.length} 条
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1 bg-gray-200 text-gray-700 rounded disabled:bg-gray-100 disabled:opacity-50"
+            >
+              首页
+            </button>
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 bg-gray-200 text-gray-700 rounded disabled:bg-gray-100"
+              className="px-3 py-1 bg-gray-200 text-gray-700 rounded disabled:bg-gray-100 disabled:opacity-50"
             >
               上一页
             </button>
-            <span className="px-3 py-1">
-              第 {currentPage} 页，共 {totalPages} 页
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm">第</span>
+              <input
+                type="number"
+                min="1"
+                max={totalPages}
+                value={currentPage}
+                onChange={(e) => {
+                  const page = parseInt(e.target.value);
+                  if (page >= 1 && page <= totalPages) {
+                    setCurrentPage(page);
+                  }
+                }}
+                className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm"
+              />
+              <span className="text-sm">页，共 {totalPages} 页</span>
+            </div>
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 bg-gray-200 text-gray-700 rounded disabled:bg-gray-100"
+              className="px-3 py-1 bg-gray-200 text-gray-700 rounded disabled:bg-gray-100 disabled:opacity-50"
             >
               下一页
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 bg-gray-200 text-gray-700 rounded disabled:bg-gray-100 disabled:opacity-50"
+            >
+              末页
             </button>
           </div>
         </div>

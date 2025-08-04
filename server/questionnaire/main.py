@@ -611,12 +611,30 @@ def analyze_text():
 
 @app.route('/translate-open-questions', methods=['POST'])
 def translate_open_questions():
-    """翻译开放题字段 - 为后续的标准打标或参考标签打标做准备"""
+    """翻译开放题字段 - 为后续的标准打标或参考标签打标做准备
+    
+    支持两种模式：
+    1. 用户选择模式：翻译用户在前端选择的特定开放题字段
+    2. 自动全选模式：翻译所有识别到的开放题字段（向后兼容）
+    
+    请求参数：
+    - analysisId: 分析ID
+    - selectedFields: 可选，用户选择的开放题字段列表
+    """
     try:
-        logger.info("🔍 收到开放题翻译请求")
+        logger.info("🔍 收到开放题翻译请求 - 新版本代码已加载！")
         
         data = request.get_json()
         analysis_id = data.get('analysisId')
+        selected_fields = data.get('selectedFields', None)  # 新增：获取用户选择的字段
+        
+        # 添加详细的调试日志
+        logger.info(f"📥 接收到请求数据: {data}")
+        logger.info(f"📋 分析ID: {analysis_id}")
+        logger.info(f"📋 用户选择的字段: {selected_fields}")
+        logger.info(f"📋 用户选择字段类型: {type(selected_fields)}")
+        if selected_fields:
+            logger.info(f"📋 用户选择字段长度: {len(selected_fields)}")
         
         if not analysis_id or analysis_id not in analysis_results:
             return jsonify({'error': '无效的分析ID'}), 400
@@ -628,16 +646,42 @@ def translate_open_questions():
         logger.info(f"📊 开始翻译开放题字段，文件: {input_file}")
         
         # 获取开放题字段列表
-        open_ended_fields = []
-        if 'open_ended' in question_types:
-            for q in question_types['open_ended']:
-                if isinstance(q, dict) and 'column' in q:
-                    open_ended_fields.append(q['column'])
+        if selected_fields and len(selected_fields) > 0:
+            # 使用用户选择的字段
+            # 验证用户选择的字段是否为有效的开放题
+            all_open_ended_fields = []
+            if 'open_ended' in question_types:
+                logger.info(f"📊 系统识别的开放题数量: {len(question_types['open_ended'])}")
+                for q in question_types['open_ended']:
+                    if isinstance(q, dict) and 'column' in q:
+                        all_open_ended_fields.append(q['column'])
+                        logger.info(f"📋 系统识别的开放题字段: {q['column']}")
+            
+            logger.info(f"📊 所有系统识别的开放题字段: {all_open_ended_fields}")
+            logger.info(f"📊 用户选择的字段: {selected_fields}")
+            
+            # 过滤用户选择的字段，只保留确实是开放题的字段
+            valid_selected_fields = [field for field in selected_fields if field in all_open_ended_fields]
+            
+            logger.info(f"📊 经过验证的有效字段: {valid_selected_fields}")
+            
+            if len(valid_selected_fields) != len(selected_fields):
+                invalid_fields = [field for field in selected_fields if field not in all_open_ended_fields]
+                logger.warning(f"⚠️  用户选择的字段中有 {len(invalid_fields)} 个不是开放题: {invalid_fields}")
+            
+            open_ended_fields = valid_selected_fields
+            logger.info(f"🎯 最终使用的开放题字段: {open_ended_fields}")
+        else:
+            # 使用原有逻辑：翻译所有识别到的开放题
+            open_ended_fields = []
+            if 'open_ended' in question_types:
+                for q in question_types['open_ended']:
+                    if isinstance(q, dict) and 'column' in q:
+                        open_ended_fields.append(q['column'])
+            logger.info(f"🔍 使用全部识别到的 {len(open_ended_fields)} 个开放题字段: {open_ended_fields}")
         
         if not open_ended_fields:
-            return jsonify({'error': '没有找到开放题字段'}), 400
-        
-        logger.info(f"🔍 识别到 {len(open_ended_fields)} 个开放题字段: {open_ended_fields}")
+            return jsonify({'error': '没有找到有效的开放题字段'}), 400
         
         try:
             # 导入classification模块进行翻译
@@ -674,7 +718,9 @@ def translate_open_questions():
                     'translated_fields': len(open_ended_fields),
                     'open_ended_fields': open_ended_fields,
                     'processing_time': datetime.now().isoformat(),
-                    'output_file': str(translate_output)
+                    'output_file': str(translate_output),
+                    'selection_mode': 'user_selected' if selected_fields else 'auto_all',  # 新增：标识选择模式
+                    'selected_by_user': bool(selected_fields and len(selected_fields) > 0)  # 新增：是否为用户选择
                 },
                 'translated_data': [],
                 'open_ended_fields': open_ended_fields,
