@@ -248,7 +248,7 @@ class QuestionnaireTranslationClassifier:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=100 * len(translated_texts)
+                max_tokens=min(100 * len(translated_texts), 16384)
             )
             
             # 解析结果
@@ -344,7 +344,7 @@ class QuestionnaireTranslationClassifier:
         # 如果英文字符比中文字符多，认为需要翻译
         return english_chars > chinese_chars
     
-    def _batch_translate_texts(self, texts, column_name, batch_size=50):
+    def _batch_translate_texts(self, texts, column_name, batch_size=10):
         """
         纯翻译功能，不涉及打标
         """
@@ -367,7 +367,26 @@ class QuestionnaireTranslationClassifier:
         """
         批量翻译单个批次
         """
-        text_list = "\n".join([f"{idx+1}. {text}" for idx, text in enumerate(texts) if text.strip()])
+        # 创建编号映射，保持所有文本的位置
+        text_mapping = []
+        text_list_items = []
+        
+        for idx, text in enumerate(texts):
+            if text.strip():  # 只发送非空文本给API
+                text_mapping.append(idx)  # 记录原始索引
+                text_list_items.append(f"{len(text_mapping)}. {text}")
+        
+        if not text_list_items:
+            # 如果所有文本都是空的，返回原文
+            return texts
+        
+        text_list = "\n".join(text_list_items)
+        
+        # 添加详细的发送内容调试
+        logger.info(f"📤 发送给API的文本列表长度: {len(text_list_items)}")
+        logger.info(f"📤 发送给API的映射: {text_mapping}")
+        for i, item in enumerate(text_list_items):
+            logger.info(f"📤 发送项{i+1}: {item[:100]}...")
         
         prompt = f"""
         请将以下英文内容翻译成中文，保持原文顺序和编号。
@@ -376,11 +395,13 @@ class QuestionnaireTranslationClassifier:
         1. 严格保持原文顺序和编号
         2. 每行输出格式为"编号. 翻译内容"
         3. 只输出翻译结果，不要其他说明
+        4. 必须翻译所有{len(text_list_items)}个编号的内容
+        5. 如果内容为空或无意义，请输出"编号. [空内容]"
         
-        {column_name}内容：
+        {column_name}内容（共{len(text_list_items)}项）：
         {text_list}
         
-        翻译结果：
+        翻译结果（请确保输出{len(text_list_items)}个编号）：
         """
         
         try:
@@ -396,22 +417,68 @@ class QuestionnaireTranslationClassifier:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=100 * len(texts)
+                max_tokens=min(200 * len(text_mapping), 16384)  # 限制不超过模型最大值
             )
             
             # 解析翻译结果
-            results = [""] * len(texts)
+            results = list(texts)  # 复制原文作为基础
             content = response.choices[0].message.content
             content = content.strip() if content else ""
             
+            logger.info(f"🔍 API返回内容长度: {len(content) if content else 0}")
+            
+            translated_count = 0
             if content:
-                for line in content.split('\n'):
+                # 重新组装翻译内容，处理跨行的翻译
+                lines = content.split('\n')
+                current_translation = ""
+                current_number = None
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    # 检查是否是新的编号开始
                     match = re.match(r'(\d+)\.\s*(.+)', line)
                     if match:
-                        idx = int(match.group(1)) - 1
-                        if idx < len(texts):
-                            translation = match.group(2).strip()
-                            results[idx] = translation
+                        # 保存之前的翻译
+                        if current_number is not None and current_translation:
+                            api_idx = current_number - 1
+                            if api_idx < len(text_mapping):
+                                original_idx = text_mapping[api_idx]
+                                results[original_idx] = current_translation.strip()
+                                logger.info(f"✅ 翻译映射: API编号{current_number} -> 原始索引{original_idx}")
+                                logger.info(f"   译文: {current_translation[:100]}...")
+                                translated_count += 1
+                        
+                        # 开始新的翻译
+                        current_number = int(match.group(1))
+                        current_translation = match.group(2)
+                    else:
+                        # 这是前一个翻译的继续
+                        if current_translation:
+                            current_translation += " " + line
+                        else:
+                            # 孤立的行，可能是翻译的一部分，尝试附加到最近的翻译
+                            logger.warning(f"⚠️ 孤立的翻译行: {line[:50]}...")
+                
+                # 处理最后一个翻译
+                if current_number is not None and current_translation:
+                    api_idx = current_number - 1
+                    if api_idx < len(text_mapping):
+                        original_idx = text_mapping[api_idx]
+                        results[original_idx] = current_translation.strip()
+                        logger.info(f"✅ 翻译映射: API编号{current_number} -> 原始索引{original_idx}")
+                        logger.info(f"   译文: {current_translation[:100]}...")
+                        translated_count += 1
+            
+            logger.info(f"✅ 批次翻译完成: 发送{len(text_mapping)}个文本，成功翻译{translated_count}个")
+            
+            # 检查哪些位置没有被翻译
+            for i, (original, result) in enumerate(zip(texts, results)):
+                if original.strip() and original == result:
+                    logger.warning(f"⚠️ 位置{i}未被翻译: {original[:50]}...")
             
             return results
             
@@ -489,8 +556,20 @@ class QuestionnaireTranslationClassifier:
             return results
         
         # 原有的一体化处理逻辑
-        # 构建批量提示
-        text_list = "\n".join([f"{idx+1}. {text}" for idx, text in enumerate(texts) if text.strip()])
+        # 创建编号映射，保持所有文本的位置
+        text_mapping = []
+        text_list_items = []
+        
+        for idx, text in enumerate(texts):
+            if text.strip():  # 只发送非空文本给API
+                text_mapping.append(idx)  # 记录原始索引
+                text_list_items.append(f"{len(text_mapping)}. {text}")
+        
+        if not text_list_items:
+            # 如果所有文本都是空的，返回空结果
+            return [("", "")] * len(texts)
+        
+        text_list = "\n".join(text_list_items)
         
         prompt = f"""
         请将以下{source_lang}内容列表翻译成{target_lang}并生成多个相关的主题标签。
@@ -499,17 +578,18 @@ class QuestionnaireTranslationClassifier:
         2. 每行输出格式为"编号. 翻译内容 | 标签1,标签2,标签3"
         3. 每个回答生成2-3个相关标签，用逗号分隔
         4. 标签要具体、细分，涵盖不同角度
-        5. 只输出结果列表，不要包含其他说明
+        5. 必须处理所有{len(text_list_items)}个编号的内容
+        6. 只输出结果列表，不要包含其他说明
         
         示例格式：
         1. 服务很慢 | 服务速度,响应时间,用户体验
         2. 界面复杂 | 界面设计,操作复杂,易用性
         3. 价格太高 | 价格问题,性价比,成本控制
         
-        {column_name}内容列表：
+        {column_name}内容列表（共{len(text_list_items)}项）：
         {text_list}
         
-        翻译和标签结果列表：
+        翻译和标签结果列表（请确保输出{len(text_list_items)}个编号）：
         """
         
         try:
@@ -526,25 +606,43 @@ class QuestionnaireTranslationClassifier:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=150 * len(texts)  # 动态token分配
+                max_tokens=min(200 * len(text_mapping), 16384)  # 限制不超过模型最大值
             )
-            logger.info(f"response: {response}")
+            logger.info(f"🔍 AI打标API返回长度: {len(response.choices[0].message.content) if response.choices[0].message.content else 0}")
             
             # 解析批量结果
-            results = [("", "")] * len(texts)
+            results = [("", "")] * len(texts)  # 基于原始文本长度创建结果数组
             content = response.choices[0].message.content
             content = content.strip() if content else ""
             
+            translated_count = 0
             if content:
                 # 解析格式：1. 翻译内容 | 标签\n2. 翻译内容 | 标签...
                 for line in content.split('\n'):
+                    line = line.strip()
+                    if not line:
+                        continue
                     match = re.match(r'(\d+)\.\s*(.*?)(?:\s*\|\s*(.*))?$', line)
                     if match:
-                        idx = int(match.group(1)) - 1
-                        if idx < len(texts):
+                        api_idx = int(match.group(1)) - 1  # API返回的编号(从1开始)
+                        if api_idx < len(text_mapping):
+                            original_idx = text_mapping[api_idx]  # 映射回原始索引
                             translation = match.group(2).strip() if match.group(2) else ""
                             tag = match.group(3).strip() if match.group(3) else ""
-                            results[idx] = (translation, tag)
+                            results[original_idx] = (translation, tag)
+                            translated_count += 1
+                            logger.info(f"✅ AI打标映射: API编号{api_idx+1} -> 原始索引{original_idx}, 标签: {tag[:50]}...")
+                        else:
+                            logger.warning(f"⚠️ AI打标API编号超出范围: {api_idx+1}, 最大: {len(text_mapping)}")
+                    else:
+                        logger.warning(f"⚠️ 无法解析AI打标行: {line[:100]}...")
+            
+            logger.info(f"✅ AI打标完成: 发送{len(text_mapping)}个文本，成功打标{translated_count}个")
+            
+            # 检查哪些位置没有被打标
+            for i, (original, result) in enumerate(zip(texts, results)):
+                if original.strip() and result == ("", ""):
+                    logger.warning(f"⚠️ 位置{i}未被AI打标: {original[:50]}...")
             
             return results
         
@@ -1024,8 +1122,8 @@ class QuestionnaireTranslationClassifier:
                 logger.error(f"❌ 保存简化结果失败: {e}")
                 return False
         
-        # 批量处理参数（大幅增加批处理大小以提高效率）
-        BATCH_SIZE = 50  # 增加批量大小
+        # 批量处理参数（平衡效率和稳定性）
+        BATCH_SIZE = 15  # 合理的批量大小，避免API超时
         
         # 处理所有列
         all_results = {}
@@ -1049,6 +1147,10 @@ class QuestionnaireTranslationClassifier:
             logger.info(f"📊 分成 {len(batches)} 个批次处理，批次大小: {BATCH_SIZE}")
             
             for batch_idx, batch in enumerate(batches):
+                # 添加延迟以避免API速率限制
+                if batch_idx > 0:
+                    time.sleep(1)  # 批次间延迟1秒
+                
                 # 动态调整批处理大小（如果文本过长）
                 max_text_len = max(len(text) for text in batch)
                 current_batch_size = min(BATCH_SIZE, 5) if max_text_len > 500 else BATCH_SIZE
@@ -1203,6 +1305,14 @@ class QuestionnaireTranslationClassifier:
         # 调用原有的处理方法，但使用参考标签模式
         return self.process_table(input_path, output_path)
 
+    def _is_chinese_text(self, text):
+        """简单判断文本是否为中文"""
+        if not text or not text.strip():
+            return False
+        chinese_chars = len([char for char in text if '\u4e00' <= char <= '\u9fff'])
+        total_chars = len([char for char in text if char.strip()])
+        return total_chars > 0 and (chinese_chars / total_chars) > 0.3  # 中文字符占比超过30%
+
     def translate_only(self, input_path, output_path, open_ended_fields):
         """只进行翻译，不进行AI分类 - 为后续的标准打标或参考标签打标做准备"""
         try:
@@ -1236,8 +1346,8 @@ class QuestionnaireTranslationClassifier:
                     df.insert(col_idx + 1, cn_col, "")
                     logger.info(f"📍 {cn_col} 插入在 {col} 后面 (索引 {col_idx+1})")
             
-            # 批量翻译处理
-            BATCH_SIZE = 50
+            # 批量翻译处理 (小批次以避免API超时)
+            BATCH_SIZE = 10
             total_rows = len(df)
             
             for col in open_ended_fields:
@@ -1251,14 +1361,42 @@ class QuestionnaireTranslationClassifier:
                 texts = df[col].fillna('').astype(str).tolist()
                 logger.info(f"📋 列 {col} 的文本数据量: {len(texts)}")
                 
-                translations = []
+                # 检测语言并分类处理
+                chinese_indices = []
+                english_indices = []
+                english_texts = []
                 
-                # 使用已有的批量翻译方法
-                translations = self._batch_translate_texts(texts, col, BATCH_SIZE)
+                for i, text in enumerate(texts):
+                    if self._is_chinese_text(text):
+                        chinese_indices.append(i)
+                    else:
+                        english_indices.append(i)
+                        english_texts.append(text)
+                
+                logger.info(f"🔍 语言检测结果: 中文 {len(chinese_indices)} 条, 英文 {len(english_indices)} 条")
+                
+                # 初始化翻译结果数组
+                translations = [""] * len(texts)
+                
+                # 中文内容直接复制
+                for i in chinese_indices:
+                    translations[i] = texts[i]
+                
+                # 英文内容进行翻译
+                if english_texts:
+                    logger.info(f"🚀 开始翻译英文内容: {len(english_texts)} 条")
+                    english_translations = self._batch_translate_texts(english_texts, col, BATCH_SIZE)
+                    
+                    # 将翻译结果放回对应位置
+                    for i, english_idx in enumerate(english_indices):
+                        if i < len(english_translations):
+                            translations[english_idx] = english_translations[i]
+                else:
+                    logger.info("📋 无英文内容需要翻译，全部为中文")
                 
                 # 更新DataFrame
                 df[cn_col] = translations
-                logger.info(f"✅ 列 {col} 翻译完成")
+                logger.info(f"✅ 列 {col} 处理完成")
             
             # 保存结果
             df.to_excel(output_path, index=False)
@@ -1317,8 +1455,8 @@ class QuestionnaireTranslationClassifier:
                 
                 logger.info(f"📍 为 {cn_col} 添加分类列: {sub_tags_col}, {main_topic_col}")
             
-            # 批量分类处理
-            BATCH_SIZE = 50
+            # 批量分类处理 (降低批次大小以避免API超时)
+            BATCH_SIZE = 10  # 从50降低到10，减少API压力
             
             for cn_col in cn_columns:
                 original_col = cn_col.replace('-CN', '')
@@ -1341,8 +1479,12 @@ class QuestionnaireTranslationClassifier:
                 for batch_idx, batch in enumerate(batches):
                     logger.info(f"🔄 分类批次 {batch_idx + 1}/{len(batches)}")
                     
-                    # 批量翻译+分类 (使用已有方法)
-                    batch_results = self.batch_translate_and_tag(batch, original_col, "中文", "中文", 15)
+                    # 添加延迟以避免API速率限制
+                    if batch_idx > 0:
+                        time.sleep(1)  # 批次间延迟1秒
+                    
+                    # 批量翻译+分类 (使用更小的批次大小避免超时)
+                    batch_results = self.batch_translate_and_tag(batch, original_col, "中文", "中文", 8)
                     
                     # 提取结果 - batch_translate_and_tag 返回 [(translation, tags), ...]
                     for translation, tags in batch_results:
