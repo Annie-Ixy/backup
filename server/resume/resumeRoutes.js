@@ -125,27 +125,22 @@ const storage = multer.diskStorage({
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    // 统一处理所有文件的中文编码
-    let originalName = file.originalname;
-    
     try {
-      // 使用统一的编码处理函数
-      originalName = decodeFilename(originalName);
+      // 使用智能文件名处理函数
+      const originalName = file.originalname || 'unknown';
+      const cleanName = sanitizeFileName(originalName);
       
-      // 生成安全的文件名，保留原始扩展名
-      const ext = path.extname(originalName);
-      const baseName = path.basename(originalName, ext);
+      // 添加时间戳前缀避免冲突
       const timestamp = Date.now();
-      const safeName = `${timestamp}-${baseName}${ext}`;
+      const safeName = `${timestamp}-${cleanName}`;
       
-      console.log(`文件保存: 原始="${file.originalname}" -> 处理后="${originalName}" -> 安全名称="${safeName}"`);
+      console.log(`文件保存: 原始="${file.originalname}" -> 安全名称="${safeName}"`);
       cb(null, safeName);
       
     } catch (error) {
       console.log(`文件名处理失败: ${error.message}，使用时间戳命名`);
-      const ext = path.extname(file.originalname);
       const timestamp = Date.now();
-      const fallbackName = `${timestamp}-file${ext}`;
+      const fallbackName = `${timestamp}-file.pdf`;
       cb(null, fallbackName);
     }
   }
@@ -169,54 +164,170 @@ const openai = createOpenAIInstance();
 // Store processed candidates in memory (in production, use a database)
 let candidatesCache = new Map();
 
-// Extract ZIP file and get PDF files
+// Extract ZIP file and get PDF files with better Windows compatibility
 async function extractZipFile(zipPath) {
   return new Promise((resolve, reject) => {
     const pdfFiles = [];
     
-    yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
-      if (err) reject(err);
+    // 使用更多选项来改善兼容性
+    const options = { 
+      lazyEntries: true,
+      decodeStrings: false  // 不自动解码字符串，我们手动处理
+    };
+    
+    yauzl.open(zipPath, options, (err, zipfile) => {
+      if (err) {
+        console.error('Error opening ZIP file:', err);
+        reject(err);
+        return;
+      }
       
       zipfile.readEntry();
       zipfile.on('entry', (entry) => {
-        if (/\.pdf$/i.test(entry.fileName)) {
-          zipfile.openReadStream(entry, (err, readStream) => {
-            if (err) {
-              zipfile.readEntry();
-              return;
-            }
-            
-            const chunks = [];
-            readStream.on('data', (chunk) => chunks.push(chunk));
-            readStream.on('end', () => {
-              // 使用统一的文件名编码处理函数
-              let decodedFileName = entry.fileName;
-              
-              try {
-                decodedFileName = decodeFilename(entry.fileName);
-                console.log(`ZIP内文件: "${entry.fileName}" -> "${decodedFileName}"`);
-              } catch (error) {
-                console.log(`ZIP文件名编码处理失败: ${entry.fileName}, 错误:`, error.message);
-                decodedFileName = entry.fileName; // 保持原文件名
-              }
-              
-              pdfFiles.push({
-                filename: decodedFileName,
-                buffer: Buffer.concat(chunks)
-              });
-              zipfile.readEntry();
-            });
-          });
-        } else {
+        // 改进的文件名处理
+        let fileName = entry.fileName;
+        
+        // 检查是否是PDF文件
+        if (!/\.pdf$/i.test(fileName)) {
           zipfile.readEntry();
+          return;
         }
+        
+        console.log(`Processing ZIP entry: "${fileName}"`);
+        
+        zipfile.openReadStream(entry, (err, readStream) => {
+          if (err) {
+            console.error('Error opening read stream:', err);
+            zipfile.readEntry();
+            return;
+          }
+          
+          const chunks = [];
+          readStream.on('data', (chunk) => chunks.push(chunk));
+          readStream.on('end', () => {
+            // 智能文件名处理 - 支持多种编码情况
+            let safeFileName = sanitizeFileName(fileName);
+            
+            console.log(`ZIP内文件: "${fileName}" -> "${safeFileName}"`);
+            
+            pdfFiles.push({
+              filename: safeFileName,
+              originalFileName: fileName,
+              buffer: Buffer.concat(chunks)
+            });
+            zipfile.readEntry();
+          });
+          
+          readStream.on('error', (err) => {
+            console.error('Error reading stream:', err);
+            zipfile.readEntry();
+          });
+        });
       });
       
       zipfile.on('end', () => {
+        console.log(`ZIP extraction completed. Found ${pdfFiles.length} PDF files.`);
         resolve(pdfFiles);
+      });
+      
+      zipfile.on('error', (err) => {
+        console.error('ZIP file error:', err);
+        reject(err);
       });
     });
   });
+}
+
+// 智能文件名清理函数 - 处理各种编码问题
+function sanitizeFileName(fileName) {
+  try {
+    if (!fileName) {
+      return `unknown_${Date.now()}.pdf`;
+    }
+    
+    let cleanName = fileName;
+    
+    // 1. 首先尝试检测和修复常见的编码问题
+    
+    // 检测Windows CP437编码（DOS编码）问题
+    if (/[ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧]/.test(cleanName)) {
+      console.log('Detected CP437 encoding artifacts, attempting to fix...');
+      try {
+        const buffer = Buffer.from(cleanName, 'binary');
+        const decodedCP437 = iconv.decode(buffer, 'cp437');
+        if (/[\u4e00-\u9fff]/.test(decodedCP437)) {
+          cleanName = decodedCP437;
+          console.log(`CP437 decode successful: ${fileName} -> ${cleanName}`);
+        }
+      } catch (e) {
+        console.log('CP437 decode failed:', e.message);
+      }
+    }
+    
+    // 检测GBK编码问题（中文Windows常见）
+    if (/[À-ÿ]/.test(cleanName) && !/[\u4e00-\u9fff]/.test(cleanName)) {
+      console.log('Detected possible GBK encoding, attempting to fix...');
+      try {
+        const buffer = Buffer.from(cleanName, 'binary');
+        const decodedGBK = iconv.decode(buffer, 'gbk');
+        if (/[\u4e00-\u9fff]/.test(decodedGBK) && decodedGBK.length > 0) {
+          cleanName = decodedGBK;
+          console.log(`GBK decode successful: ${fileName} -> ${cleanName}`);
+        }
+      } catch (e) {
+        console.log('GBK decode failed:', e.message);
+      }
+    }
+    
+    // 检测UTF-8误读为Latin1的情况
+    if (/[ä¸­æ–‡]/.test(cleanName)) {
+      console.log('Detected UTF-8 read as Latin1, attempting to fix...');
+      try {
+        const buffer = Buffer.from(cleanName, 'latin1');
+        const utf8Result = buffer.toString('utf8');
+        if (/[\u4e00-\u9fff]/.test(utf8Result)) {
+          cleanName = utf8Result;
+          console.log(`UTF-8 fix successful: ${fileName} -> ${cleanName}`);
+        }
+      } catch (e) {
+        console.log('UTF-8 fix failed:', e.message);
+      }
+    }
+    
+    // 2. 清理文件名，移除不安全字符
+    cleanName = cleanName
+      .replace(/[<>:"/\\|?*]/g, '') // 移除Windows不允许的字符
+      .replace(/[^\w\s\u4e00-\u9fff\-\.()[\]]/g, '') // 只保留安全字符（包括中文）
+      .replace(/\s+/g, '_') // 空格替换为下划线
+      .replace(/_{2,}/g, '_') // 多个下划线合并为一个
+      .trim();
+    
+    // 3. 确保文件名不为空且有合理长度
+    if (!cleanName || cleanName.length === 0) {
+      cleanName = `file_${Date.now()}`;
+    }
+    
+    // 限制文件名长度（保留扩展名）
+    const maxLength = 50;
+    const ext = path.extname(cleanName);
+    const nameWithoutExt = path.basename(cleanName, ext);
+    
+    if (nameWithoutExt.length > maxLength) {
+      cleanName = nameWithoutExt.substring(0, maxLength) + ext;
+    }
+    
+    // 确保有扩展名
+    if (!path.extname(cleanName)) {
+      cleanName += '.pdf';
+    }
+    
+    return cleanName;
+    
+  } catch (error) {
+    console.error(`Error sanitizing filename "${fileName}":`, error);
+    // 如果所有方法都失败，生成一个安全的默认名称
+    return `file_${Date.now()}.pdf`;
+  }
 }
 
 // Extract text from PDF
@@ -770,6 +881,8 @@ router.get('/api/results/:jobId', (req, res) => {
 // Process multiple files (new function for handling multiple PDF uploads)
 async function processMultipleFiles(uploadedFiles, jobId, jobDescription) {
   try {
+    console.log(`开始处理 ${uploadedFiles.length} 个上传文件，系统: ${process.platform}`);
+    
     // Update status to processing
     candidatesCache.set(jobId, { status: 'processing', candidates: [], jobDescription });
     
@@ -787,12 +900,14 @@ async function processMultipleFiles(uploadedFiles, jobId, jobDescription) {
         console.log(`Processing PDF file: ${uploadedFile.originalname}`);
         const pdfBuffer = await fs.readFile(uploadedFile.path);
         
-        // Use original filename for display (decode if needed)
-        let displayName = uploadedFile.originalname;
+        // Use original filename for display (智能处理)
+        let displayName = uploadedFile.originalname || 'unknown';
         try {
-          displayName = decodeFilename(uploadedFile.originalname);
+          // 使用智能文件名处理函数
+          displayName = sanitizeFileName(uploadedFile.originalname);
         } catch (error) {
-          console.log(`Failed to decode filename: ${uploadedFile.originalname}`);
+          console.log(`Failed to process filename: ${uploadedFile.originalname}`);
+          displayName = `file_${Date.now()}.pdf`;
         }
         
         pdfFiles.push({
@@ -805,23 +920,39 @@ async function processMultipleFiles(uploadedFiles, jobId, jobDescription) {
         
       } else if (fileExtension === '.zip') {
         // Handle ZIP file - extract PDFs
-        console.log(`Processing ZIP file: ${uploadedFile.originalname}`);
-        const extractedPdfs = await extractZipFile(uploadedFile.path);
+        console.log(`Processing ZIP file: ${uploadedFile.originalname} (${process.platform} system)`);
         
-        // Save extracted PDF files for later access
-        for (const pdfFile of extractedPdfs) {
-          const safeName = `${jobId}-${Date.now()}-${pdfFile.filename}`;
-          const savedPath = path.join(uploadsDir, safeName);
-          await fs.writeFile(savedPath, pdfFile.buffer);
-          pdfFile.savedPath = savedPath;
-          savedPdfFiles.set(pdfFile.filename, savedPath);
-          console.log(`Saved extracted PDF: ${pdfFile.filename} -> ${safeName}`);
+        try {
+          const extractedPdfs = await extractZipFile(uploadedFile.path);
+          
+          if (extractedPdfs.length === 0) {
+            console.log(`Warning: No PDF files found in ZIP: ${uploadedFile.originalname}`);
+            continue;
+          }
+        
+          // Save extracted PDF files for later access
+          for (const pdfFile of extractedPdfs) {
+            // 使用智能文件名处理
+            const safeFileName = sanitizeFileName(pdfFile.filename);
+            
+            const safeName = `${jobId}-${Date.now()}-${safeFileName}`;
+            const savedPath = path.join(uploadsDir, safeName);
+            await fs.writeFile(savedPath, pdfFile.buffer);
+            pdfFile.savedPath = savedPath;
+            savedPdfFiles.set(pdfFile.filename, savedPath);
+            console.log(`Saved extracted PDF: ${pdfFile.filename} -> ${safeName}`);
+          }
+          
+          pdfFiles = pdfFiles.concat(extractedPdfs);
+          
+          // Clean up ZIP file after extraction
+          fs.remove(uploadedFile.path);
+          
+        } catch (zipError) {
+          console.error(`Error processing ZIP file ${uploadedFile.originalname}:`, zipError);
+          // 继续处理其他文件，不让一个ZIP文件的错误影响整个处理过程
+          continue;
         }
-        
-        pdfFiles = pdfFiles.concat(extractedPdfs);
-        
-        // Clean up ZIP file after extraction
-        fs.remove(uploadedFile.path);
         
       } else {
         console.log(`Skipping unsupported file: ${uploadedFile.originalname}`);
@@ -934,7 +1065,15 @@ async function processResumes(filePath, jobId, jobDescription) {
       // Extract original filename from the saved filename (remove timestamp prefix)
       const savedFilename = path.basename(filePath);
       const timestampMatch = savedFilename.match(/^\d+-(.+)$/);
-      const displayName = timestampMatch ? timestampMatch[1] : savedFilename;
+      let displayName = timestampMatch ? timestampMatch[1] : savedFilename;
+      
+      // 使用智能文件名处理
+      try {
+        displayName = sanitizeFileName(displayName);
+      } catch (error) {
+        console.log(`Failed to process filename: ${displayName}`);
+        displayName = `file_${Date.now()}.pdf`;
+      }
       
       pdfFiles = [{
         filename: displayName, // Use original filename for display
@@ -950,7 +1089,10 @@ async function processResumes(filePath, jobId, jobDescription) {
       
       // Save extracted PDF files for later access
       for (const pdfFile of pdfFiles) {
-        const safeName = `${jobId}-${Date.now()}-${pdfFile.filename}`;
+        // 使用智能文件名处理
+        const safeFileName = sanitizeFileName(pdfFile.filename);
+        
+        const safeName = `${jobId}-${Date.now()}-${safeFileName}`;
         const savedPath = path.join(uploadsDir, safeName);
         await fs.writeFile(savedPath, pdfFile.buffer);
         pdfFile.savedPath = savedPath;
