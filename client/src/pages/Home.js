@@ -14,9 +14,10 @@ import {
   Zap,
   Palette,
   TrendingUp,
-  ClipboardList
+  ClipboardList,
+  Bot
 } from 'lucide-react';
-// import { isLogin } from '../utils/index.ts';
+import { isLogin } from '../utils/index.ts';
 
   function Home() {
     const isLoginChecked = useRef(false);
@@ -77,6 +78,10 @@ import {
       navigate('/questionnaire-analysis');
     };
 
+    const handleGoToCustomerService = () => {
+      navigate('/customer-service');
+    };
+
     // AI工具模块配置
     const aiTools = [
       {
@@ -110,6 +115,16 @@ import {
         available: true
       },
       {
+        id: 'customer-service',
+        title: '智能客服中心',
+        description: 'AI驱动的故障诊断与解决方案推荐系统，提供专业的技术支持服务',
+        icon: Bot,
+        color: 'bg-red-600',
+        hoverColor: 'hover:bg-red-700',
+        action: handleGoToCustomerService,
+        available: true
+      },
+      {
         id: 'competitor-analysis',
         title: '竞品分析',
         description: '智能分析竞争对手产品特性、市场策略和用户反馈，生成专业竞品分析报告',
@@ -129,16 +144,16 @@ import {
         action: () => navigate('/image'),
         available: false
       },
-      {
-        id: 'analytics',
-        title: '数据分析',
-        description: '智能数据分析和可视化，生成深度洞察报告',
-        icon: BarChart3,
-        color: 'bg-orange-600',
-        hoverColor: 'hover:bg-orange-700',
-        action: () => navigate('/analytics'),
-        available: false
-      }
+      // {
+      //   id: 'analytics',
+      //   title: '数据分析',
+      //   description: '智能数据分析和可视化，生成深度洞察报告',
+      //   icon: BarChart3,
+      //   color: 'bg-orange-600',
+      //   hoverColor: 'hover:bg-orange-700',
+      //   action: () => navigate('/analytics'),
+      //   available: false
+      // }
     ];
 
     return (

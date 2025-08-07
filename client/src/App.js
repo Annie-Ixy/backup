@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Resume from './pages/Resume';
 import DesignReview from './pages/DesignReview';
 import QuestionnaireAnalysis from './pages/QuestionnaireAnalysis';
+import CustomerService from './pages/CustomerService';
 import ProtectedRoute from './components/ProtectedRoute';
 import { isLogin } from './utils/index.ts';
 
@@ -86,6 +87,15 @@ function App() {
             </ProtectedRoute>
           } 
         />
+
+        <Route 
+            path="/customer-service" 
+            element={
+              <ProtectedRoute>
+                <CustomerService />
+              </ProtectedRoute>
+            } 
+          />
         
         {/* 404页面 - 使用路由拦截逻辑 */}
         <Route path="*" element={<RouteInterceptor />} />
