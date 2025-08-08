@@ -207,6 +207,7 @@ function CustomerService() {
   };
 
   const handleLogout = () => {
+     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('username');
     localStorage.removeItem('token');
     navigate('/login');
