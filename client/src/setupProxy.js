@@ -29,17 +29,43 @@ module.exports = function(app) {
       logLevel: 'debug',
     })
   );
-    // 问卷分析Python API代理
+    // 用户认证API代理
     app.use(
       '/dev-api-py',
       createProxyMiddleware({
         target: 'http://localhost:9001',
         changeOrigin: true,
         pathRewrite: {
-          '^/dev-api-py': '', // 移除 /dev-api-py 前缀
+          '^/dev-api': '', // 移除 /dev-api 前缀
         },
-        secure: false,
+        secure: true,
         logLevel: 'debug',
       })
     );
+
+  // 客服系统API代理
+  app.use(
+    '/customer-service',
+    createProxyMiddleware({
+      target: 'http://localhost:6573',
+      changeOrigin: true,
+      secure: false,
+      logLevel: 'debug',
+      onProxyReq: (proxyReq, req, res) => {
+        console.log('代理请求:', req.method, req.url, '->', proxyReq.path);
+        console.log('目标URL:', proxyReq.getHeader('host'), proxyReq.path);
+        console.log('原始路径:', req.url);
+        console.log('重写后路径:', proxyReq.path);
+        // 确保请求头正确
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Accept', 'application/json');
+      },
+      onProxyRes: (proxyRes, req, res) => {
+        console.log('代理响应:', proxyRes.statusCode, req.url);
+      },
+      onError: (err, req, res) => {
+        console.error('代理错误:', err.message);
+      },
+    })
+  );
 };
