@@ -68,4 +68,17 @@ module.exports = function(app) {
       },
     })
   );
+    // 社媒分析API代理
+    app.use(
+      '/socialmedia',
+      createProxyMiddleware({
+        target: 'http://10.53.184.254:9002',
+        changeOrigin: true,
+        pathRewrite: {
+          '^/socialmedia': '', // 移除 /socialmedia 前缀
+        },
+        secure: true,
+        logLevel: 'debug',
+      })
+    );
 };

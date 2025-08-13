@@ -259,10 +259,10 @@ function CustomerService() {
   };
 
   const handleLogout = () => {
-     localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('username');
     localStorage.removeItem('token');
-    navigate('/login');
+    navigate('/');
   };
 
   const handleGoToHome = () => {
@@ -337,7 +337,7 @@ function CustomerService() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-                             <button
+                <button
                  onClick={handleGoToHome}
                  className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
                >

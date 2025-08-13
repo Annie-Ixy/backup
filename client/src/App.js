@@ -7,6 +7,7 @@ import DesignReview from './pages/DesignReview';
 import QuestionnaireAnalysis from './pages/QuestionnaireAnalysis';
 import CustomerService from './pages/CustomerService';
 import ProtectedRoute from './components/ProtectedRoute';
+import SocialMedia from './pages/Socialmedia.js';
 import { isLogin } from './utils/index.ts';
 
 // 路由拦截组件
@@ -96,6 +97,15 @@ function App() {
               </ProtectedRoute>
             } 
           />
+
+        <Route 
+          path="/social-media" 
+          element={
+            <ProtectedRoute>
+              <SocialMedia />
+            </ProtectedRoute>
+          } 
+        />
         
         {/* 404页面 - 使用路由拦截逻辑 */}
         <Route path="*" element={<RouteInterceptor />} />

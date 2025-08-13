@@ -1,0 +1,325 @@
+/* 全局样式 */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f5f5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 通用样式 */
+.main-container {
+  min-height: calc(100vh - 64px);
+  padding: 24px;
+}
+
+.page-header {
+  background: #fff;
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+}
+
+.page-content {
+  background: #fff;
+  padding: 24px;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+}
+
+/* 统计卡片样式 */
+.stats-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+.stats-card .ant-card-body {
+  padding: 20px;
+}
+
+.stats-number {
+  font-size: 32px;
+  font-weight: bold;
+  margin: 8px 0;
+}
+
+.stats-label {
+  opacity: 0.9;
+  font-size: 14px;
+}
+
+/* 上传区域样式 */
+.upload-area {
+  border: 2px dashed #d9d9d9;
+  border-radius: 6px;
+  background: #fafafa;
+  text-align: center;
+  padding: 40px 20px;
+  transition: border-color 0.3s ease;
+}
+
+.upload-area:hover {
+  border-color: #1890ff;
+}
+
+.upload-area.dragover {
+  border-color: #1890ff;
+  background: #e6f7ff;
+}
+
+/* 分析结果样式 */
+.analysis-section {
+  margin-bottom: 24px;
+}
+
+.analysis-section .ant-card-head-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.keyword-analysis-item {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #1890ff;
+}
+
+.keyword-analysis-item h4 {
+  margin: 0 0 12px 0;
+  color: #1890ff;
+  font-weight: 600;
+}
+
+.sentiment-distribution {
+  display: flex;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.sentiment-item {
+  flex: 1;
+  text-align: center;
+  padding: 12px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #f0f0f0;
+}
+
+.sentiment-item.positive {
+  border-color: #52c41a;
+  color: #52c41a;
+}
+
+.sentiment-item.negative {
+  border-color: #ff4d4f;
+  color: #ff4d4f;
+}
+
+.sentiment-item.neutral {
+  border-color: #faad14;
+  color: #faad14;
+}
+
+.channel-stats {
+  margin: 16px 0;
+}
+
+.channel-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.sample-mentions {
+  margin-top: 16px;
+}
+
+.mention-example {
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border-left: 3px solid #1890ff;
+}
+
+.mention-meta {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 12px;
+  color: #666;
+}
+
+.mention-author {
+  font-weight: 500;
+}
+
+.mention-time {
+  color: #999;
+}
+
+/* 历史记录样式 */
+.upload-history {
+  margin-top: 24px;
+}
+
+.status-success {
+  color: #52c41a;
+}
+
+.status-error {
+  color: #ff4d4f;
+}
+
+.status-processing {
+  color: #1890ff;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .main-container {
+    padding: 12px;
+  }
+  
+  .page-header,
+  .page-content {
+    padding: 16px;
+  }
+  
+  .sentiment-distribution {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  /* 移动端布局调整 */
+  .ant-col-18, .ant-col-6 {
+    width: 100% !important;
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* 移动端导航菜单样式 */
+  .ant-card .ant-menu-vertical {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+  }
+  
+  .ant-card .ant-menu-vertical .ant-menu-item {
+    white-space: nowrap;
+    min-width: auto;
+  }
+}
+
+/* 侧边导航菜单样式优化 */
+.ant-menu-vertical .ant-menu-item {
+  margin: 4px 0;
+  border-radius: 6px;
+}
+
+.ant-menu-vertical .ant-menu-item:hover {
+  background-color: #f0f2f5;
+}
+
+.ant-menu-vertical .ant-menu-item-selected {
+  background-color: #e6f7ff;
+  border-left: 3px solid #1890ff;
+}
+
+/* 功能导航卡片样式 */
+.navigation-card {
+  position: sticky;
+  top: 24px;
+}
+
+.navigation-card .ant-card-head {
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.navigation-card .ant-card-head-title {
+  font-weight: 600;
+  color: #262626;
+}
+
+/* 数据源标签页样式 */
+.ant-tabs-tab {
+  padding: 12px 16px !important;
+}
+
+.ant-tabs-tab-btn {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+/* 开发中标签样式 */
+.ant-tabs-tab .ant-tabs-tab-btn {
+  transition: all 0.3s ease;
+}
+
+/* Header高度调整 */
+.ant-layout-header {
+  height: auto !important;
+  line-height: normal !important;
+}
+
+/* ECharts 图表容器 */
+.chart-container {
+  width: 100%;
+  height: 300px;
+  margin: 16px 0;
+}
+
+.chart-container-small {
+  width: 100%;
+  height: 200px;
+  margin: 16px 0;
+}
+
+/* 加载状态样式 */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+}
+
+/* 空状态样式 */
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
+.empty-state .ant-empty-image {
+  margin-bottom: 16px;
+}
+
+/* 自定义按钮样式 */
+.primary-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.primary-button:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+}

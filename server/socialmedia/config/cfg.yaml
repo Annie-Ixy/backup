@@ -1,0 +1,10 @@
+system:  
+  upload:  
+    allowed_extensions: ['.xlsx', '.xls', '.csv']  
+  analysis:  
+    default_date_range: 30  
+    max_keywords: 10  
+default_keywords:  
+  - keyword: petlibro  
+    category: brand  
+    priority: 10 

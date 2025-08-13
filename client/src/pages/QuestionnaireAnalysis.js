@@ -1978,7 +1978,7 @@ const QuestionnaireAnalysis = () => {
 
          {/* Main Content */}
          <div className="flex-1 py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-white rounded-2xl shadow-xl">
             {/* Page Header */}
             <motion.div
@@ -1987,16 +1987,16 @@ const QuestionnaireAnalysis = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <div className="mb-6">
+              <div className="mb-1">
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl mb-4">
                   <BarChart3 className="w-8 h-8 text-white" />
                 </div>
               </div>
 
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
                 问卷文本分析系统
               </h2>
-              <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+              <p className="text-l text-gray-600 mb-8 max-w-2xl mx-auto">
                 上传问卷数据文件，使用AI技术进行智能分析，包括情绪分析、话题归类、关键词提取、内容摘要和数据看板
               </p>
 
