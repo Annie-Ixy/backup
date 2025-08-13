@@ -47,7 +47,7 @@ module.exports = function(app) {
   app.use(
     '/customer-service',
     createProxyMiddleware({
-      target: 'http://localhost:6573',
+      target: 'http://10.53.184.254:9002',
       changeOrigin: true,
       secure: false,
       logLevel: 'debug',

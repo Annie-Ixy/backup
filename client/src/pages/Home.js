@@ -358,7 +358,6 @@ const ToolIcon = ({ type, color }) => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
-                onClick={tool.available ? tool.action : undefined}
                 className={`relative rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-100 h-80 ${
                   tool.available ? 'hover:scale-105 hover:-translate-y-2' : 'opacity-75'
                 }`}
@@ -415,6 +414,7 @@ const ToolIcon = ({ type, color }) => {
                       !tool.available ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl'
                     }`}
                     disabled={!tool.available}
+                    onClick={tool.available ? tool.action : undefined}
                   >
                     {tool.available ? '立即使用' : '敬请期待'}
                   </button>

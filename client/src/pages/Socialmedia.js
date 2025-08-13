@@ -73,7 +73,7 @@ const Upload = () => {
     const timeoutController = new AbortController();
     const timeoutId = setTimeout(() => timeoutController.abort(), 3600000); // 1小时超时
     console.log(formData);
-    api.post('http://10.53.184.254:9002/api/upload', formData, {
+    api.post('/customer-service/api/upload', formData, {
       signal: timeoutController.signal,
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -180,7 +180,7 @@ const Upload = () => {
     }, 1000); // 更长的间隔
 
     // 调用分析API
-    api.post('http://10.53.184.254:9002/api/analysis/start', {
+    api.post('/customer-service/api/analysis/start', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -61,12 +61,11 @@ const History = () => {
   ];
 
 
-
   // 加载上传历史
   const loadUploadHistory = async () => {
     setUploadsLoading(true);
     try {
-      const response = await fetch('http://10.53.184.254:9002/api/uploads/history');
+      const response = await fetch('/customer-service/api/uploads/history');
       const result = await response.json();
       
       if (result.success) {

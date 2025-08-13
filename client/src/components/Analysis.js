@@ -19,7 +19,7 @@ const Analysis = () => {
   useEffect(() => {
     const fetchPlatforms = async () => {
       try {
-        const response = await fetch('http://10.53.184.254:9002/api/platforms');
+        const response = await api.get('/customer-service/api/platforms');
         const result = await response;
         if (result.success) {
           setPlatforms(result.data || []);
@@ -34,18 +34,12 @@ const Analysis = () => {
   const handleAnalysis = async (values) => {
     setLoading(true);
     try {
-      const response = await fetch('http://10.53.184.254:9002/api/analysis', {
-        method: 'POST',
-        body: JSON.stringify({
-          keywords: values.keywords,
-          start_date: values.dateRange ? values.dateRange[0].format('YYYY-MM-DD') : null,
-          end_date: values.dateRange ? values.dateRange[1].format('YYYY-MM-DD') : null,
-          platforms: values.platforms,
-          analysis_types: values.analysisTypes,
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await api.post('/customer-service/api/analysis', {
+        keywords: values.keywords,
+        start_date: values.dateRange ? values.dateRange[0].format('YYYY-MM-DD') : null,
+        end_date: values.dateRange ? values.dateRange[1].format('YYYY-MM-DD') : null,
+        platforms: values.platforms,
+        analysis_types: values.analysisTypes,
       });
 
       const result = await response;
