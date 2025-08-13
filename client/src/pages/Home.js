@@ -17,7 +17,9 @@ import {
 import resumeIcon from '../assets/resume-icon.png';
 import designReviewIcon from '../assets/design-review-icon.png';
 import questionnaireAnalysisIcon from '../assets/questionnaire-analysis-icon.png';
-import customerServiceIcon from '../assets/customer-service.png';
+import customerServiceIcon from '../assets/customer-service-icon.png';
+import voiceCloningIcon from '../assets/vocie-cloning-icon.png';
+import socialMediaIcon from '../assets/social-media-icon.png';
 import { isLogin } from '../utils/index.ts';
 
 // 工具图标组件
@@ -110,6 +112,17 @@ const ToolIcon = ({ type, color }) => {
           <circle cx="40" cy="55" r="3" fill={getColorValue(color)}/>
         </svg>
       );
+    case 'voice-cloning':
+      return (
+        <svg width={iconSize} height={iconSize} viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="80" height="80" rx="16" fill={getColorValue(color)} />
+          <circle cx="40" cy="35" r="8" fill="white" opacity="0.9"/>
+          <path d="M35 35c0 2.5 2.5 4 5 4s5-1.5 5-4" stroke={getColorValue(color)} strokeWidth="2" strokeLinecap="round"/>
+          <path d="M30 45c0-5.5 4.5-10 10-10s10 4.5 10 10" fill="white" opacity="0.9"/>
+          <path d="M25 55c0-8.284 6.716-15 15-15s15 6.716 15 15" fill="white" opacity="0.9"/>
+          <path d="M20 65c0-11.046 8.954-20 20-20s20 8.954 20 20" fill="white" opacity="0.9"/>
+        </svg>
+      );
     default:
       return null;
   }
@@ -183,6 +196,10 @@ const ToolIcon = ({ type, color }) => {
       alert('社媒分析功能即将上线，敬请期待！');
     };
 
+    const handleGoToVoiceCloning = () => {
+      navigate('/voice-cloning');
+    };
+
     // AI工具模块配置
     const aiTools = [
       {
@@ -237,12 +254,24 @@ const ToolIcon = ({ type, color }) => {
         id: 'social-media-analysis',
         title: '社媒分析',
         description: '智能分析社交媒体数据，监控品牌声誉，洞察用户情感和趋势变化',
-        image: null,
+        image: socialMediaIcon,
         icon: TrendingUp,
         iconType: 'social-media-analysis',
         color: 'bg-orange-600',
         hoverColor: 'hover:bg-orange-700',
         action: () => navigate('/social-media'),
+        available: true
+      },
+      {
+        id: 'voice-cloning',
+        title: '语音生成',
+        description: '使用AI技术生成声音，将文字转换为自然语音，支持多种语言',
+        image: voiceCloningIcon,
+        icon: Zap,
+        iconType: 'voice-cloning',
+        color: 'bg-indigo-600',
+        hoverColor: 'hover:bg-indigo-700',
+        action: handleGoToVoiceCloning,
         available: true
       },
       {
@@ -329,6 +358,7 @@ const ToolIcon = ({ type, color }) => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
+                onClick={tool.available ? tool.action : undefined}
                 className={`relative rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-100 h-80 ${
                   tool.available ? 'hover:scale-105 hover:-translate-y-2' : 'opacity-75'
                 }`}
@@ -385,7 +415,6 @@ const ToolIcon = ({ type, color }) => {
                       !tool.available ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl'
                     }`}
                     disabled={!tool.available}
-                    onClick={tool.available ? tool.action : undefined}
                   >
                     {tool.available ? '立即使用' : '敬请期待'}
                   </button>

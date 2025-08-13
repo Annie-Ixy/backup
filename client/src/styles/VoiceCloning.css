@@ -1,0 +1,1214 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+.voice-cloning-container {
+  /* Ant Design 风格的颜色系统 */
+  --ant-primary-color: #1890ff;
+  --ant-primary-hover: #40a9ff;
+  --ant-primary-active: #096dd9;
+  --ant-success-color: #52c41a;
+  --ant-warning-color: #faad14;
+  --ant-error-color: #ff4d4f;
+  --ant-info-color: #1890ff;
+  
+  /* 中性色 */
+  --ant-text-color: rgba(0, 0, 0, 0.85);
+  --ant-text-color-secondary: rgba(0, 0, 0, 0.45);
+  --ant-text-color-disabled: rgba(0, 0, 0, 0.25);
+  --ant-border-color-base: #d9d9d9;
+  --ant-border-color-split: #f0f0f0;
+  --ant-background-color-light: #fafafa;
+  --ant-background-color-base: #f5f5f5;
+  --ant-component-background: #ffffff;
+  
+  /* 阴影 */
+  --ant-box-shadow-base: 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 9px 28px 8px rgba(0, 0, 0, 0.05);
+  --ant-box-shadow-card: 0 1px 2px -2px rgba(0, 0, 0, 0.16), 0 3px 6px 0 rgba(0, 0, 0, 0.12), 0 5px 12px 4px rgba(0, 0, 0, 0.09);
+  
+  /* 圆角 */
+  --ant-border-radius-base: 6px;
+  --ant-border-radius-sm: 4px;
+  --ant-border-radius-lg: 8px;
+  
+  /* 间距 */
+  --ant-padding-xs: 8px;
+  --ant-padding-sm: 12px;
+  --ant-padding-md: 16px;
+  --ant-padding-lg: 24px;
+  --ant-padding-xl: 32px;
+  --ant-margin-xs: 8px;
+  --ant-margin-sm: 12px;
+  --ant-margin-md: 16px;
+  --ant-margin-lg: 24px;
+  --ant-margin-xl: 32px;
+}
+
+.voice-cloning-container {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.6;
+  color: var(--ant-text-color);
+  background: #0f0f23;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.voice-cloning-container::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(118, 75, 162, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(240, 147, 251, 0.2) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.voice-cloning-container::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255, 255, 255, 0.03) 2px, rgba(255, 255, 255, 0.03) 4px),
+    repeating-linear-gradient(180deg, transparent, transparent 2px, rgba(255, 255, 255, 0.03) 2px, rgba(255, 255, 255, 0.03) 4px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.voice-cloning-container .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--ant-padding-xl) var(--ant-padding-lg);
+  position: relative;
+}
+
+/* 新的 Header 样式 */
+.voice-cloning-container > header {
+  background: var(--ant-component-background);
+  border-bottom: 1px solid var(--ant-border-color-split);
+  box-shadow: var(--ant-box-shadow-base);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 80px;
+  display: flex;
+  align-items: center;
+}
+
+.voice-cloning-container > header .max-w-7xl {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 var(--ant-padding-lg);
+  width: 100%;
+}
+
+.voice-cloning-container > header .flex {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+}
+
+.voice-cloning-container > header .gap-3 {
+  gap: var(--ant-margin-md);
+}
+
+.voice-cloning-container > header .space-x-4 {
+  gap: var(--ant-margin-lg);
+}
+
+.voice-cloning-container > header button {
+  display: flex;
+  align-items: center;
+  gap: var(--ant-margin-sm);
+  padding: var(--ant-padding-sm) var(--ant-margin-md);
+  color: var(--ant-text-color-secondary);
+  transition: all 0.2s ease;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.voice-cloning-container > header button:hover {
+  color: var(--ant-text-color);
+}
+
+.voice-cloning-container > header .w-10 {
+  width: 40px;
+  height: 40px;
+}
+
+.voice-cloning-container > header .bg-purple-600 {
+  background: #9333ea;
+}
+
+.voice-cloning-container > header .rounded-lg {
+  border-radius: var(--ant-border-radius-base);
+}
+
+.voice-cloning-container > header .text-2xl {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ant-text-color);
+  margin: 0;
+}
+
+.voice-cloning-container > header .text-sm {
+  font-size: 14px;
+  color: var(--ant-text-color-secondary);
+  margin: 0;
+}
+
+.voice-cloning-container > header .text-gray-900 {
+  color: var(--ant-text-color);
+}
+
+.voice-cloning-container > header .text-gray-500 {
+  color: var(--ant-text-color-secondary);
+}
+
+.voice-cloning-container > header .text-gray-600 {
+  color: var(--ant-text-color-secondary);
+}
+
+.voice-cloning-container > header .text-gray-700 {
+  color: var(--ant-text-color);
+}
+
+.voice-cloning-container > header .hover\:text-gray-900:hover {
+  color: var(--ant-text-color);
+}
+
+.voice-cloning-container > header .w-5 {
+  width: 20px;
+  height: 20px;
+}
+
+.voice-cloning-container > header .h-5 {
+  height: 20px;
+}
+
+.voice-cloning-container > header .h-4 {
+  height: 16px;
+}
+
+.voice-cloning-container > header .w-4 {
+  width: 16px;
+}
+
+.voice-cloning-container > header .w-6 {
+  width: 24px;
+  height: 24px;
+}
+
+.voice-cloning-container > header .h-6 {
+  height: 24px;
+}
+
+/* 调整容器顶部间距，为 header 留出空间 */
+.voice-cloning-container .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: calc(var(--ant-padding-xl) + 80px) var(--ant-padding-lg) var(--ant-padding-xl);
+  position: relative;
+  z-index: 2;
+}
+
+/* 语言切换按钮 - Ant Design 风格 */
+.voice-cloning-container .language-toggle {
+  position: fixed;
+  top: calc(var(--ant-padding-lg) + 80px);
+  right: var(--ant-padding-lg);
+  z-index: 1000;
+}
+
+.voice-cloning-container .lang-btn {
+  background: var(--ant-component-background);
+  border: 1px solid var(--ant-border-color-base);
+  color: var(--ant-text-color);
+  padding: var(--ant-padding-sm) var(--ant-padding-md);
+  border-radius: var(--ant-border-radius-base);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--ant-box-shadow-base);
+}
+
+.voice-cloning-container .lang-btn:hover {
+  border-color: var(--ant-primary-color);
+  color: var(--ant-primary-color);
+}
+
+.voice-cloning-container .lang-btn:active {
+  transform: scale(0.98);
+}
+
+.voice-cloning-container .lang-btn .lang-en,
+.voice-cloning-container .lang-btn .lang-cn {
+  transition: all 0.2s ease;
+}
+
+.voice-cloning-container .lang-btn .lang-divider {
+  opacity: 0.3;
+}
+
+.voice-cloning-container .lang-btn.cn .lang-en {
+  opacity: 0.5;
+  font-weight: 400;
+}
+
+.voice-cloning-container .lang-btn.cn .lang-cn {
+  opacity: 1;
+  font-weight: 600;
+  color: var(--ant-primary-color);
+}
+
+.voice-cloning-container .lang-btn:not(.cn) .lang-en {
+  opacity: 1;
+  font-weight: 600;
+  color: var(--ant-primary-color);
+}
+
+.voice-cloning-container .lang-btn:not(.cn) .lang-cn {
+  opacity: 0.5;
+  font-weight: 400;
+}
+
+/* 头部样式 - Ant Design 风格 */
+.voice-cloning-container header {
+  text-align: center;
+  margin-bottom: var(--ant-margin-xl) * 2;
+  padding: var(--ant-padding-xl) 0;
+}
+
+.voice-cloning-container header h1 {
+  font-size: 48px;
+  font-weight: 600;
+  margin-bottom: var(--ant-margin-md);
+  color: var(--ant-text-color);
+  display: flex;
+  gap: var(--ant-margin-md);
+  line-height: 1.2;
+}
+
+/* 旧的图标样式已移除，使用新的Lucide图标样式 */
+
+.voice-cloning-container header p {
+  font-size: 16px;
+  color: var(--ant-text-color-secondary);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* 卡片样式 - Ant Design 风格 */
+.voice-cloning-container .card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 24px;
+  padding: var(--ant-padding-xl);
+  margin-bottom: var(--ant-margin-lg);
+  box-shadow: 
+    0 8px 32px 0 rgba(31, 38, 135, 0.15),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: fadeInUp 0.6s ease-out forwards;
+  opacity: 0;
+  z-index: 2;
+  position: relative;
+}
+
+.voice-cloning-container .card:nth-child(1) { animation-delay: 0.1s; }
+.voice-cloning-container .card:nth-child(2) { animation-delay: 0.2s; }
+.voice-cloning-container .card:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.voice-cloning-container .card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 
+    0 12px 48px 0 rgba(31, 38, 135, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.voice-cloning-container .card h2 {
+  color: var(--ant-text-color);
+  margin-bottom: var(--ant-margin-md);
+  font-size: 20px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--ant-margin-sm);
+  line-height: 1.4;
+}
+
+/* 旧的图标样式已移除，使用新的Lucide图标样式 */
+
+.voice-cloning-container .card p {
+  color: var(--ant-text-color-secondary);
+  margin-bottom: var(--ant-margin-lg);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* 表单样式 - Ant Design 风格 */
+.voice-cloning-container .form-group {
+  margin-bottom: var(--ant-margin-lg);
+}
+
+.voice-cloning-container label {
+  display: block;
+  margin-bottom: var(--ant-margin-sm);
+  font-weight: 500;
+  color: var(--ant-text-color);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.voice-cloning-container input[type="text"],
+.voice-cloning-container textarea,
+.voice-cloning-container select {
+  width: 100%;
+  padding: var(--ant-padding-sm) var(--ant-padding-md);
+  border: 1px solid var(--ant-border-color-base);
+  background: var(--ant-component-background);
+  border-radius: var(--ant-border-radius-base);
+  font-size: 14px;
+  font-family: inherit;
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+  line-height: 1.5715;
+  box-sizing: border-box;
+}
+
+.voice-cloning-container input[type="text"]:hover,
+.voice-cloning-container textarea:hover,
+.voice-cloning-container select:hover {
+  border-color: var(--ant-primary-hover);
+}
+
+.voice-cloning-container input[type="text"]:focus,
+.voice-cloning-container textarea:focus,
+.voice-cloning-container select:focus {
+  outline: none;
+  border-color: var(--ant-primary-color);
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.voice-cloning-container textarea {
+  resize: vertical;
+  min-height: 120px;
+  line-height: 1.6;
+}
+
+.voice-cloning-container input[type="file"] {
+  width: 100%;
+  padding: var(--ant-padding-lg);
+  border: 2px dashed var(--ant-border-color-base);
+  border-radius: var(--ant-border-radius-base);
+  background: var(--ant-background-color-light);
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+  cursor: pointer;
+  text-align: center;
+  font-weight: 500;
+  color: var(--ant-text-color-secondary);
+  box-sizing: border-box;
+}
+
+.voice-cloning-container input[type="file"]:hover {
+  border-color: var(--ant-primary-color);
+  background: rgba(24, 144, 255, 0.02);
+}
+
+.voice-cloning-container input[type="file"]:focus {
+  outline: none;
+  border-color: var(--ant-primary-color);
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.voice-cloning-container .form-group small {
+  color: var(--ant-text-color-secondary);
+  font-size: 12px;
+  margin-top: var(--ant-margin-xs);
+  display: block;
+  line-height: 1.4;
+}
+
+/* 按钮样式 - Ant Design 风格 */
+.voice-cloning-container .btn {
+  padding: var(--ant-padding-sm) var(--ant-padding-lg);
+  border: 1px solid transparent;
+  border-radius: var(--ant-border-radius-base);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+  margin-right: var(--ant-margin-sm);
+  margin-bottom: var(--ant-margin-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ant-margin-xs);
+  text-decoration: none;
+  line-height: 1.5715;
+  position: relative;
+  box-sizing: border-box;
+  height: 32px;
+}
+
+.voice-cloning-container .btn.primary {
+  background: var(--ant-primary-color);
+  color: white;
+  border-color: var(--ant-primary-color);
+}
+
+.voice-cloning-container .btn.primary:hover {
+  background: var(--ant-primary-hover);
+  border-color: var(--ant-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+}
+
+.voice-cloning-container .btn.primary:active {
+  background: var(--ant-primary-active);
+  border-color: var(--ant-primary-active);
+}
+
+.voice-cloning-container .btn.secondary {
+  background: var(--ant-component-background);
+  color: var(--ant-text-color);
+  border-color: var(--ant-border-color-base);
+}
+
+.voice-cloning-container .btn.secondary:hover {
+  color: var(--ant-primary-color);
+  border-color: var(--ant-primary-color);
+  transform: translateY(-1px);
+}
+
+.voice-cloning-container .btn.secondary:active {
+  color: var(--ant-primary-active);
+  border-color: var(--ant-primary-active);
+}
+
+.voice-cloning-container .btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.voice-cloning-container .btn:disabled:hover {
+  transform: none;
+}
+
+/* 按钮组样式 */
+.voice-cloning-container .button-group {
+  display: flex;
+  gap: var(--ant-margin-sm);
+  margin-bottom: var(--ant-margin-md);
+}
+
+/* 选择框和按钮组合样式 */
+.voice-cloning-container .select-with-button {
+  display: flex;
+  gap: var(--ant-margin-sm);
+  align-items: flex-end;
+}
+
+.voice-cloning-container .select-with-button .ant-select {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.voice-cloning-container .select-with-button .btn {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+/* Ant Design Select 组件样式优化 */
+.voice-cloning-container .ant-select {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+.voice-cloning-container .ant-select-selector {
+  border-radius: var(--ant-border-radius-base) !important;
+  border-color: var(--ant-border-color-base) !important;
+  background: var(--ant-component-background) !important;
+  transition: all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1) !important;
+}
+
+.voice-cloning-container .ant-select-selector:hover {
+  border-color: var(--ant-primary-hover) !important;
+}
+
+.voice-cloning-container .ant-select-focused .ant-select-selector {
+  border-color: var(--ant-primary-color) !important;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2) !important;
+}
+
+.voice-cloning-container .ant-select-dropdown {
+  border-radius: var(--ant-border-radius-base) !important;
+  box-shadow: var(--ant-box-shadow-base) !important;
+  border: 1px solid var(--ant-border-color-split) !important;
+}
+
+.voice-cloning-container .ant-select-item {
+  border-radius: var(--ant-border-radius-sm) !important;
+  margin: 2px 8px !important;
+}
+
+.voice-cloning-container .ant-select-item-option-selected {
+  background-color: var(--ant-primary-color) !important;
+  color: white !important;
+}
+
+.voice-cloning-container .ant-select-item-option-active {
+  background-color: var(--ant-background-color-light) !important;
+}
+
+/* 状态提示样式 - Ant Design 风格 */
+.voice-cloning-container .status {
+  margin-top: var(--ant-margin-md);
+  padding: var(--ant-padding-md);
+  border-radius: var(--ant-border-radius-base);
+  font-weight: 500;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: var(--ant-margin-sm);
+  border: 1px solid transparent;
+  line-height: 1.5715;
+}
+
+.voice-cloning-container .status.success {
+  background: #f6ffed;
+  color: #52c41a;
+  border-color: #b7eb8f;
+}
+
+.voice-cloning-container .status.error {
+  background: #fff2f0;
+  color: #ff4d4f;
+  border-color: #ffccc7;
+}
+
+.voice-cloning-container .status.loading {
+  background: #e6f7ff;
+  color: #1890ff;
+  border-color: #91d5ff;
+}
+
+.voice-cloning-container .status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.voice-cloning-container .status.success::before {
+  background: #52c41a;
+}
+
+.voice-cloning-container .status.error::before {
+  background: #ff4d4f;
+}
+
+.voice-cloning-container .status.loading::before {
+  background: #1890ff;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 音频播放器样式 - Ant Design 风格 */
+.voice-cloning-container .audio-player {
+  margin-top: var(--ant-margin-lg);
+  padding: var(--ant-padding-lg);
+  background: var(--ant-background-color-light);
+  border: 1px solid var(--ant-border-color-split);
+  border-radius: var(--ant-border-radius-base);
+  text-align: center;
+}
+
+.voice-cloning-container .audio-player audio {
+  width: 100%;
+  margin-bottom: var(--ant-margin-md);
+  border-radius: var(--ant-border-radius-base);
+}
+
+/* 页脚样式 - Ant Design 风格 */
+.voice-cloning-container footer {
+  text-align: center;
+  margin-top: var(--ant-margin-xl) * 2;
+  padding: var(--ant-padding-lg);
+  color: white;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.voice-cloning-container footer p {
+  margin: 0;
+}
+
+/* 旧的图标样式已移除，使用新的Lucide图标样式 */
+
+/* 移除旧的FontAwesome样式 */
+
+/* 桌面端优化样式 */
+.voice-cloning-container .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--ant-padding-xl) var(--ant-padding-lg);
+  position: relative;
+}
+
+.voice-cloning-container .card {
+  background: var(--ant-component-background);
+  border: 1px solid var(--ant-border-color-split);
+  border-radius: var(--ant-border-radius-lg);
+  padding: var(--ant-padding-xl);
+  margin-bottom: var(--ant-margin-lg);
+  box-shadow: var(--ant-box-shadow-card);
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+.voice-cloning-container .card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: var(--ant-primary-color);
+}
+
+/* 优化表单布局 */
+.voice-cloning-container .form-group {
+  margin-bottom: var(--ant-margin-lg);
+}
+
+.voice-cloning-container .form-group:last-child {
+  margin-bottom: 0;
+}
+
+/* 优化按钮布局 */
+.voice-cloning-container .button-group {
+  display: flex;
+  gap: var(--ant-margin-sm);
+  margin-bottom: var(--ant-margin-md);
+  align-items: center;
+}
+
+.voice-cloning-container .button-group .btn {
+  min-width: 120px;
+}
+
+/* 优化选择框和按钮组合 */
+.voice-cloning-container .select-with-button {
+  display: flex;
+  gap: var(--ant-margin-sm);
+  align-items: flex-end;
+}
+
+.voice-cloning-container .select-with-button .ant-select {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.voice-cloning-container .select-with-button .btn {
+  margin-bottom: 0;
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+.voice-cloning-container header h1 {
+  font-size: 56px;
+  font-weight: 700;
+  margin-bottom: var(--ant-margin-lg);
+  background: linear-gradient(135deg, var(--ant-text-color) 0%, var(--ant-primary-color) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 旧的图标样式已移除，使用新的Lucide图标样式 */
+
+.voice-cloning-container header p {
+  font-size: 18px;
+  color: var(--ant-text-color-secondary);
+  max-width: 700px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+/* 页面 Header 样式 */
+.voice-cloning-container .page-header {
+  text-align: center;
+  margin-bottom: calc(var(--ant-margin-xl) * 2);
+  padding: calc(var(--ant-padding-xl) * 1.5) 0;
+  color: white;
+}
+
+.voice-cloning-container .page-header h1 {
+  font-size: 56px;
+  font-weight: 800;
+  margin-bottom: var(--ant-margin-lg);
+  background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 80px rgba(102, 126, 234, 0.5);
+  letter-spacing: -1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ant-margin-md);
+  line-height: 1.2;
+}
+
+.voice-cloning-container .page-header h1 i {
+  font-size: 0.8em;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.voice-cloning-container .page-header p {
+  font-size: 18px;
+  opacity: 0.95;
+  font-weight: 300;
+  color: #e0e7ff;
+  max-width: 700px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+/* 卡片内容优化 */
+.voice-cloning-container .card h2 {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: var(--ant-margin-md);
+  color: var(--ant-text-color);
+  display: flex;
+  align-items: center;
+  gap: var(--ant-margin-sm);
+  line-height: 1.4;
+}
+
+.voice-cloning-container .card p {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ant-text-color-secondary);
+  margin-bottom: var(--ant-margin-lg);
+}
+
+/* 表单元素优化 */
+.voice-cloning-container input[type="text"],
+.voice-cloning-container textarea,
+.voice-cloning-container select {
+  font-size: 15px;
+  padding: var(--ant-padding-md) var(--ant-padding-lg);
+  border-radius: var(--ant-border-radius-base);
+  border: 1px solid var(--ant-border-color-base);
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+.voice-cloning-container input[type="text"]:focus,
+.voice-cloning-container textarea:focus,
+.voice-cloning-container select:focus {
+  border-color: var(--ant-primary-color);
+  box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.1);
+}
+
+.voice-cloning-container input[type="file"] {
+  padding: calc(var(--ant-padding-lg) * 1.5);
+  border: 2px dashed var(--ant-border-color-base);
+  border-radius: var(--ant-border-radius-base);
+  background: var(--ant-background-color-light);
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+  cursor: pointer;
+  text-align: center;
+  font-weight: 500;
+  color: var(--ant-text-color-secondary);
+}
+
+.voice-cloning-container input[type="file"]:hover {
+  border-color: var(--ant-primary-color);
+  background: rgba(24, 144, 255, 0.02);
+  transform: translateY(-1px);
+}
+
+/* 状态提示优化 */
+.voice-cloning-container .status {
+  margin-top: var(--ant-margin-lg);
+  padding: var(--ant-padding-lg);
+  border-radius: var(--ant-border-radius-base);
+  font-weight: 500;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: var(--ant-margin-md);
+  border: 1px solid transparent;
+  line-height: 1.6;
+}
+
+.voice-cloning-container .status::before {
+  width: 8px;
+  height: 8px;
+}
+
+/* 音频播放器优化 */
+.voice-cloning-container .audio-player {
+  margin-top: var(--ant-margin-lg);
+  padding: var(--ant-padding-xl);
+  background: var(--ant-background-color-light);
+  border: 1px solid var(--ant-border-color-split);
+  border-radius: var(--ant-border-radius-base);
+  text-align: center;
+  box-shadow: var(--ant-box-shadow-base);
+}
+
+.voice-cloning-container .audio-player audio {
+  width: 100%;
+  margin-bottom: var(--ant-margin-lg);
+  border-radius: var(--ant-border-radius-base);
+}
+
+/* 页脚优化 */
+.voice-cloning-container footer {
+  text-align: center;
+  margin-top: calc(var(--ant-margin-xl) * 2);
+  padding: var(--ant-padding-xl);
+  color: white;
+  font-size: 15px;
+  line-height: 1.7;
+  border-top: 1px solid var(--ant-border-color-split);
+}
+
+/* 滚动条样式优化 */
+.voice-cloning-container ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.voice-cloning-container ::-webkit-scrollbar-track {
+  background: var(--ant-background-color-light);
+  border-radius: 4px;
+}
+
+.voice-cloning-container ::-webkit-scrollbar-thumb {
+  background: var(--ant-border-color-base);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.voice-cloning-container ::-webkit-scrollbar-thumb:hover {
+  background: var(--ant-primary-color);
+} 
+
+/* 图标样式优化 */
+.voice-cloning-container .header-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--ant-primary-color);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 4px 8px rgba(24, 144, 255, 0.3));
+  transition: all 0.3s ease;
+}
+
+.voice-cloning-container .header-icon:hover {
+  transform: scale(1.05);
+  filter: drop-shadow(0 6px 12px rgba(24, 144, 255, 0.4));
+}
+
+.voice-cloning-container .section-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--ant-primary-color);
+  stroke-width: 1.5;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.voice-cloning-container .label-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--ant-text-color-secondary);
+  stroke-width: 1.5;
+  margin-right: var(--ant-margin-xs);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.voice-cloning-container .btn-icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.voice-cloning-container .footer-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.5;
+  margin: 0 var(--ant-margin-xs);
+  vertical-align: middle;
+  transition: all 0.2s ease;
+}
+
+.voice-cloning-container .footer-icon.heart {
+  color: #ff4d4f;
+  animation: heartbeat 2s ease-in-out infinite;
+}
+
+@keyframes heartbeat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.voice-cloning-container .btn-icon.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 图标悬停效果 */
+.voice-cloning-container .section-icon:hover {
+  color: var(--ant-primary-hover);
+  transform: scale(1.1);
+  transition: all 0.2s ease;
+}
+
+.voice-cloning-container .label-icon:hover {
+  color: var(--ant-primary-color);
+  transform: scale(1.1);
+  transition: all 0.2s ease;
+}
+
+/* 按钮图标悬停效果 */
+.voice-cloning-container .btn:hover .btn-icon {
+  transform: scale(1.1);
+  transition: transform 0.2s ease;
+}
+
+/* 页脚图标悬停效果 */
+.voice-cloning-container footer:hover .footer-icon {
+  transform: scale(1.1);
+  transition: transform 0.2s ease;
+}
+
+.voice-cloning-container footer:hover .footer-icon.heart {
+  animation: heartbeat 1s ease-in-out infinite;
+} 
+
+/* 图标与文字的对齐优化 */
+.voice-cloning-container h1,
+.voice-cloning-container h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--ant-margin-sm);
+}
+
+.voice-cloning-container label {
+  display: flex;
+  align-items: center;
+  gap: var(--ant-margin-xs);
+}
+
+.voice-cloning-container .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ant-margin-xs);
+}
+
+.voice-cloning-container footer p {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ant-margin-xs);
+}
+
+/* 图标颜色主题 */
+.voice-cloning-container .section-icon {
+  background: linear-gradient(135deg, var(--ant-primary-color) 0%, var(--ant-primary-hover) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: none;
+}
+
+.voice-cloning-container .section-icon:hover {
+  background: linear-gradient(135deg, var(--ant-primary-hover) 0%, var(--ant-primary-color) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 特殊图标样式 */
+.voice-cloning-container .btn-icon.sparkles {
+  color: #ffd700;
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.5));
+}
+
+.voice-cloning-container .btn-icon.play {
+  color: #52c41a;
+  filter: drop-shadow(0 0 4px rgba(82, 196, 26, 0.5));
+}
+
+.voice-cloning-container .btn-icon.download {
+  color: #1890ff;
+  filter: drop-shadow(0 0 4px rgba(24, 144, 255, 0.5));
+}
+
+.voice-cloning-container .btn-icon.refresh {
+  color: #722ed1;
+  filter: drop-shadow(0 0 4px rgba(114, 46, 209, 0.5));
+} 
+
+/* 卡片图标增强效果 */
+.voice-cloning-container .card h2 .section-icon {
+  position: relative;
+  padding: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(24, 144, 255, 0.1) 0%, rgba(24, 144, 255, 0.05) 100%);
+  border: 1px solid rgba(24, 144, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.voice-cloning-container .card h2:hover .section-icon {
+  background: linear-gradient(135deg, rgba(24, 144, 255, 0.15) 0%, rgba(24, 144, 255, 0.1) 100%);
+  border-color: rgba(24, 144, 255, 0.4);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.2);
+}
+
+/* 标签图标增强 */
+.voice-cloning-container label .label-icon {
+  padding: 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.voice-cloning-container label:hover .label-icon {
+  background: rgba(24, 144, 255, 0.1);
+  transform: scale(1.1);
+}
+
+/* 按钮图标增强 */
+.voice-cloning-container .btn .btn-icon {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.voice-cloning-container .btn:hover .btn-icon {
+  transform: scale(1.1);
+}
+
+.voice-cloning-container .btn.primary:hover .btn-icon {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
+}
+
+.voice-cloning-container .btn.secondary:hover .btn-icon {
+  filter: drop-shadow(0 0 8px rgba(24, 144, 255, 0.4));
+}
+
+/* 页脚图标增强 */
+.voice-cloning-container footer .footer-icon {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.voice-cloning-container footer:hover .footer-icon {
+  transform: scale(1.1);
+}
+
+.voice-cloning-container footer .footer-icon.heart {
+  position: relative;
+}
+
+.voice-cloning-container footer .footer-icon.heart::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: radial-gradient(circle, rgba(255, 77, 79, 0.3) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: pulse-heart 2s ease-in-out infinite;
+}
+
+@keyframes pulse-heart {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+}
+
+/* 头部图标增强 */
+.voice-cloning-container .page-header h1 .header-icon {
+  position: relative;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 8px 16px rgba(102, 126, 234, 0.4));
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.voice-cloning-container .page-header h1:hover .header-icon {
+  animation: float 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 12px 24px rgba(102, 126, 234, 0.6));
+} 

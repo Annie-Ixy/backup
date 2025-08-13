@@ -8,6 +8,7 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.9.0",
     "axios": "^1.6.0",
     "cors": "^2.8.5",
     "csv-parser": "^3.0.0",
