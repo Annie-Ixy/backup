@@ -32,6 +32,7 @@ export const useTranslation = () => {
       'generate-title': 'Generate Speech',
       'text-input-label': 'Enter text to convert to speech:',
       'text-input-placeholder': 'Type your message here...',
+      'audio-format-label': 'Output Format:',
       'generate-btn': 'Generate Speech',
       'download-btn': 'Download Audio',
       
@@ -74,6 +75,7 @@ export const useTranslation = () => {
       'generate-title': '生成语音',
       'text-input-label': '输入要转换为语音的文字：',
       'text-input-placeholder': '在此输入您的消息...',
+      'audio-format-label': '输出格式：',
       'generate-btn': '生成语音',
       'download-btn': '下载音频',
       

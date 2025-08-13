@@ -40,6 +40,7 @@ const VoiceCloning = () => {
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
   const [username, setUsername] = useState('用户');
   const [audioKey, setAudioKey] = useState(0); // 添加音频key来强制重新渲染
+  const [selectedFormat, setSelectedFormat] = useState('aac'); // 添加格式选择状态
   
   const audioFileInputRef = useRef(null);
   const audioElementRef = useRef(null); // 添加音频元素引用
@@ -187,7 +188,8 @@ const VoiceCloning = () => {
 
       const response = await api.post('/test/voice-cloning/api/generate-speech', {
         text: textInput,
-        voiceId: selectedVoice
+        voiceId: selectedVoice,
+        format: selectedFormat // 传递格式参数
       }, {
         responseType: 'blob'
       });
@@ -239,7 +241,9 @@ const VoiceCloning = () => {
     const url = URL.createObjectURL(currentAudioBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `generated-speech-${Date.now()}.mp3`;
+    // 根据选择的格式使用正确的文件扩展名
+    const extension = selectedFormat || 'aac';
+    a.download = `generated-speech-${Date.now()}.${extension}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -396,9 +400,10 @@ const VoiceCloning = () => {
                   placeholder={t('select-voice-placeholder')}
                   style={{ width: '100%' }}
                   showSearch
-                  filterOption={(input, option) =>
-                    (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
+                  filterOption={(input, option) => {
+                    const optionText = option?.children || option?.label || '';
+                    return optionText.toLowerCase().includes(input.toLowerCase());
+                  }}
                 >
                   {voices.map((voice, index) => (
                     <Select.Option key={index} value={voice.voiceId || voice.voice_id}>
@@ -440,6 +445,20 @@ const VoiceCloning = () => {
                 onChange={(e) => setTextInput(e.target.value)}
                 rows="4"
               />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="formatSelect">{t('audio-format-label')}</label>
+              <Select
+                id="formatSelect"
+                value={selectedFormat}
+                onChange={(value) => setSelectedFormat(value)}
+                style={{ width: '100%' }}
+              >
+                <Select.Option value="aac">AAC (MP4)</Select.Option>
+                <Select.Option value="mp3">MP3</Select.Option>
+                <Select.Option value="wav">WAV</Select.Option>
+              </Select>
             </div>
 
             <div className="button-group">

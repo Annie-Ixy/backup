@@ -2,6 +2,8 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const ffmpeg = require('fluent-ffmpeg');
+const { Readable } = require('stream');
 const { ElevenLabsClient } = require('@elevenlabs/elevenlabs-js');
 require('dotenv').config();
 
@@ -119,7 +121,7 @@ router.post('/api/clone-voice', upload.single('audio'), async (req, res) => {
 // Generate speech from text using a specific voice
 router.post('/api/generate-speech', async (req, res) => {
     try {
-        const { text, voiceId } = req.body;
+        const { text, voiceId, format = 'aac' } = req.body;  // Default to AAC format
 
         if (!text || !voiceId || voiceId === 'undefined') {
             return res.status(400).json({
@@ -143,16 +145,41 @@ router.post('/api/generate-speech', async (req, res) => {
         for await (const chunk of audio) {
             chunks.push(chunk);
         }
-        const audioBuffer = Buffer.concat(chunks);
+        const mp3Buffer = Buffer.concat(chunks);
+        
+        let finalBuffer;
+        let contentType;
+        let filename;
+        
+        // Convert to AAC if requested (default), otherwise keep as MP3
+        if (format === 'aac') {
+            console.log('Converting MP3 to AAC format...');
+            try {
+                finalBuffer = await convertMP3toAAC(mp3Buffer);
+                contentType = 'audio/aac';
+                filename = 'generated-speech.aac';
+                console.log('Successfully converted to AAC');
+            } catch (conversionError) {
+                console.error('AAC conversion failed, falling back to MP3:', conversionError);
+                // Fallback to MP3 if conversion fails
+                finalBuffer = mp3Buffer;
+                contentType = 'audio/mpeg';
+                filename = 'generated-speech.mp3';
+            }
+        } else {
+            finalBuffer = mp3Buffer;
+            contentType = 'audio/mpeg';
+            filename = 'generated-speech.mp3';
+        }
 
         // Set appropriate headers for audio response
         res.set({
-            'Content-Type': 'audio/mpeg',
-            'Content-Length': audioBuffer.length,
-            'Content-Disposition': 'attachment; filename="generated-speech.mp3"'
+            'Content-Type': contentType,
+            'Content-Length': finalBuffer.length,
+            'Content-Disposition': `attachment; filename="${filename}"`
         });
 
-        res.send(audioBuffer);
+        res.send(finalBuffer);
 
     } catch (error) {
         console.error('Error generating speech:', error);
@@ -162,6 +189,37 @@ router.post('/api/generate-speech', async (req, res) => {
         });
     }
 });
+
+// Helper function to convert audio buffer from MP3 to AAC
+function convertMP3toAAC(mp3Buffer) {
+    return new Promise((resolve, reject) => {
+        const inputStream = new Readable();
+        inputStream.push(mp3Buffer);
+        inputStream.push(null);
+        
+        const chunks = [];
+        
+        ffmpeg(inputStream)
+            .inputFormat('mp3')
+            .audioCodec('aac')
+            .audioBitrate('128k')
+            .audioChannels(2)
+            .audioFrequency(44100)
+            .format('adts')  // AAC with ADTS headers for better compatibility
+            .on('error', (err) => {
+                console.error('FFmpeg conversion error:', err);
+                reject(err);
+            })
+            .on('end', () => {
+                const aacBuffer = Buffer.concat(chunks);
+                resolve(aacBuffer);
+            })
+            .pipe()
+            .on('data', (chunk) => {
+                chunks.push(chunk);
+            });
+    });
+}
 
 // Health check endpoint
 router.get('/api/health', (req, res) => {
