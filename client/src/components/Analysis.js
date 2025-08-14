@@ -19,7 +19,7 @@ const Analysis = () => {
   useEffect(() => {
     const fetchPlatforms = async () => {
       try {
-        const response = await api.get('/customer-service/api/platforms');
+        const response = await api.get('/socialmedia/api/platforms');
         const result = await response;
         if (result.success) {
           setPlatforms(result.data || []);
@@ -34,7 +34,7 @@ const Analysis = () => {
   const handleAnalysis = async (values) => {
     setLoading(true);
     try {
-      const response = await api.post('/customer-service/api/analysis', {
+      const response = await api.post('/socialmedia/api/analysis', {
         keywords: values.keywords,
         start_date: values.dateRange ? values.dateRange[0].format('YYYY-MM-DD') : null,
         end_date: values.dateRange ? values.dateRange[1].format('YYYY-MM-DD') : null,
@@ -46,7 +46,7 @@ const Analysis = () => {
       
       if (result.success) {
         setAnalysisResult(result.data);
-        message.success('分析完成！');
+        message.success(result.message);
       } else {
         message.error(result.message || '分析失败');
       }
