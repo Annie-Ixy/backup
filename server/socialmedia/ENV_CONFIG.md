@@ -1,153 +1,197 @@
 # 环境变量配置说明
 
 ## 概述
+本系统支持通过环境变量配置数据库连接，支持SSL和非SSL连接，适用于不同的部署环境。
 
-该项目已支持使用环境变量进行配置，提高了安全性和部署灵活性。
+## 基础配置
 
-## 配置优先级
-
-系统按以下优先级读取配置：
-
-1. **`.env` 文件** (最高优先级)
-2. **系统环境变量**
-3. **`cfg.yaml` 配置文件** (最低优先级)
-
-## 快速开始
-
-### 1. 创建环境配置文件
-
+### 必需的环境变量
 ```bash
-# 复制示例文件
-cp .env.example .env
-
-# 编辑配置文件
-# 填入你的实际配置值
+# 数据库连接信息
+DB_HOST=10.51.32.12          # 数据库服务器地址
+DB_PORT=4000                  # 数据库端口
+DB_DATABASE=mkt               # 数据库名称
+DB_USERNAME=root              # 用户名
+DB_PASSWORD=your_password     # 密码
+DB_CHARSET=utf8mb4           # 字符集
 ```
 
-### 2. 必需的环境变量
-
-| 变量名 | 说明 | 示例值 |
-|--------|------|--------|
-| `DB_HOST` | TiDB数据库主机地址 | `10.51.32.12` |
-| `DB_PORT` | TiDB数据库端口 | `4000` |
-| `DB_DATABASE` | 数据库名称 | `mkt` |
-| `DB_USERNAME` | 数据库用户名 | `root` |
-| `DB_PASSWORD` | 数据库密码 | `your_password` |
-| `DB_CHARSET` | 数据库字符集 | `utf8mb4` |
-
-### 3. 可选的环境变量
-
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `FRONTEND_PORT` | 前端服务端口 | `3002` |
-| `BACKEND_PORT` | 后端服务端口 | `9002` |
-| `MAX_FILE_SIZE` | 最大文件上传大小(字节) | `52428800` |
-| `UPLOAD_FOLDER` | 文件上传目录 | `./uploads` |
-| `LOG_LEVEL` | 日志级别 | `INFO` |
-| `CORS_ORIGINS` | 跨域允许的源 | `http://localhost:3002,http://127.0.0.1:3002` |
-| `RATE_LIMIT_PER_MINUTE` | API每分钟请求限制 | `60` |
-
-## 安全注意事项
-
-### ⚠️ 重要提醒
-
-1. **永远不要提交 `.env` 文件到版本控制系统**
-2. `.env` 文件包含敏感信息，应该保持私密
-3. 使用 `.env.example` 作为模板分享配置结构
-
-### 📁 文件说明
-
-- **`.env`** - 包含实际配置值的文件（被git忽略）
-- **`.env.example`** - 配置模板文件（可以提交到git）
-- **`.gitignore`** - 确保敏感文件不被追踪
-
-## 部署方式
-
-### 开发环境
-
+### 可选的环境变量
 ```bash
-# 1. 复制配置文件
-cp .env.example .env
+# SSL配置
+DB_SSL_MODE=DISABLED         # SSL模式 (DISABLED/REQUIRED/VERIFY_CA/VERIFY_IDENTITY)
+DB_SSL_CA=/path/to/ca.pem    # CA证书路径
+DB_SSL_CERT=/path/to/cert.pem # 客户端证书路径
+DB_SSL_KEY=/path/to/key.pem  # 客户端私钥路径
+```
 
-# 2. 编辑 .env 文件，填入开发环境配置
-# 3. 启动服务
-./start.sh  # Linux/Mac
-# 或
-start.bat   # Windows
+## SSL模式说明
+
+### 1. DISABLED (默认)
+- **用途**: 本地开发、内网环境
+- **安全性**: 无加密
+- **配置**: 无需额外配置
+- **示例**: 
+```bash
+DB_SSL_MODE=DISABLED
+```
+
+### 2. REQUIRED
+- **用途**: 测试环境、需要加密但不需要证书验证
+- **安全性**: 基本加密保护
+- **配置**: 无需证书文件
+- **示例**: 
+```bash
+DB_SSL_MODE=REQUIRED
+```
+
+### 3. VERIFY_CA
+- **用途**: 生产环境、需要验证服务器身份
+- **安全性**: 高安全性
+- **配置**: 需要CA证书
+- **示例**: 
+```bash
+DB_SSL_MODE=VERIFY_CA
+DB_SSL_CA=./certs/ca-cert.pem
+```
+
+### 4. VERIFY_IDENTITY
+- **用途**: 高安全环境、双向SSL认证
+- **安全性**: 最高安全性
+- **配置**: 需要CA证书、客户端证书和私钥
+- **示例**: 
+```bash
+DB_SSL_MODE=VERIFY_IDENTITY
+DB_SSL_CA=./certs/ca-cert.pem
+DB_SSL_CERT=./certs/client-cert.pem
+DB_SSL_KEY=./certs/client-key.pem
+```
+
+## 不同环境的配置示例
+
+### 本地开发环境
+```bash
+# .env.local
+DB_HOST=localhost
+DB_PORT=4000
+DB_DATABASE=mkt_dev
+DB_USERNAME=root
+DB_PASSWORD=dev_password
+DB_CHARSET=utf8mb4
+DB_SSL_MODE=DISABLED
+```
+
+### 内网测试环境
+```bash
+# .env.test
+DB_HOST=10.51.32.12
+DB_PORT=4000
+DB_DATABASE=mkt_test
+DB_USERNAME=test_user
+DB_PASSWORD=test_password
+DB_CHARSET=utf8mb4
+DB_SSL_MODE=REQUIRED
 ```
 
 ### 生产环境
-
 ```bash
-# 方式1: 使用 .env 文件
-cp .env.example .env
-# 编辑 .env 文件，填入生产环境配置
-
-# 方式2: 使用系统环境变量
-export DB_HOST=production_host
-export DB_PASSWORD=production_password
-# ... 其他配置
-
-# 启动服务
-python backend/app.py
+# .env.prod
+DB_HOST=prod-db.example.com
+DB_PORT=4000
+DB_DATABASE=mkt_prod
+DB_USERNAME=prod_user
+DB_PASSWORD=prod_password
+DB_CHARSET=utf8mb4
+DB_SSL_MODE=VERIFY_CA
+DB_SSL_CA=./certs/ca-cert.pem
 ```
 
-### Docker部署
-
-```dockerfile
-# Dockerfile示例
-FROM python:3.11
-
-# 设置环境变量
-ENV DB_HOST=your_host
-ENV DB_PASSWORD=your_password
-# ... 其他配置
-
-# 或者使用 .env 文件
-COPY .env .env
-
-# 其他Docker指令...
+### 云服务环境
+```bash
+# .env.cloud
+DB_HOST=cloud-db.example.com
+DB_PORT=4000
+DB_DATABASE=mkt_cloud
+DB_USERNAME=cloud_user
+DB_PASSWORD=cloud_password
+DB_CHARSET=utf8mb4
+DB_SSL_MODE=VERIFY_IDENTITY
+DB_SSL_CA=./certs/ca-cert.pem
+DB_SSL_CERT=./certs/client-cert.pem
+DB_SSL_KEY=./certs/client-key.pem
 ```
+
+## 兼容性说明
+
+### 向后兼容性
+- **不设置SSL**: 默认使用非SSL连接，完全兼容现有配置
+- **设置SSL**: 自动启用SSL连接，支持证书验证
+
+### 自动降级机制
+- 如果配置了 `VERIFY_CA` 但CA证书不存在，自动降级到 `REQUIRED` 模式
+- 如果配置了 `VERIFY_IDENTITY` 但证书文件缺失，自动降级到 `VERIFY_CA` 模式
+- 系统会输出警告信息，但不会中断连接
+
+### 环境检测
+系统会自动检测环境变量并应用相应配置：
+```bash
+# 调试输出示例
+调试 - 环境变量读取结果:
+  DB_HOST: 10.51.32.12
+  DB_PORT: 4000
+  DB_DATABASE: mkt
+  DB_USERNAME: root
+  DB_CHARSET: utf8mb4
+  DB_SSL_MODE: REQUIRED
+  SSL配置: {'ssl': True}
+  最终配置: {...}
+```
+
+## 部署建议
+
+### 开发环境
+- 使用 `DISABLED` 模式，简化配置
+- 无需证书文件
+
+### 测试环境
+- 使用 `REQUIRED` 模式，提供基本加密
+- 无需证书文件
+
+### 生产环境
+- 使用 `VERIFY_CA` 模式，验证服务器身份
+- 配置CA证书文件
+
+### 高安全环境
+- 使用 `VERIFY_IDENTITY` 模式，双向认证
+- 配置完整的证书链
 
 ## 故障排除
 
 ### 常见问题
 
-1. **配置不生效**
-   - 检查 `.env` 文件是否存在且可读
-   - 确认变量名拼写正确
-   - 重启服务使配置生效
+1. **SSL连接失败**
+   - 检查 `DB_SSL_MODE` 设置
+   - 验证证书文件路径和权限
+   - 确认数据库服务器支持SSL
 
-2. **数据库连接失败**
-   - 验证数据库配置变量
-   - 检查网络连接
-   - 确认数据库服务正常运行
+2. **证书验证失败**
+   - 检查CA证书是否有效
+   - 确认证书文件格式正确
+   - 验证证书是否过期
 
-3. **端口冲突**
-   - 修改 `FRONTEND_PORT` 或 `BACKEND_PORT`
-   - 检查端口是否被其他程序占用
+3. **权限错误**
+   - 确保应用有读取证书文件的权限
+   - 检查证书文件的用户和组权限
 
-### 调试技巧
+### 调试步骤
 
-```python
-# 在Python代码中检查环境变量
-import os
-print(f"DB_HOST: {os.getenv('DB_HOST')}")
-print(f"BACKEND_PORT: {os.getenv('BACKEND_PORT')}")
-```
+1. 检查环境变量是否正确设置
+2. 查看连接日志中的SSL配置信息
+3. 验证证书文件是否存在和可读
+4. 测试数据库服务器的SSL支持
 
-## 迁移指南
+## 相关文档
 
-### 从cfg.yaml迁移
-
-1. 查看当前 `config/cfg.yaml` 中的配置
-2. 复制 `.env.example` 为 `.env`
-3. 将yaml中的值转移到 `.env` 文件
-4. 测试服务启动和数据库连接
-5. 删除或备份 `cfg.yaml`（可选）
-
-## 更多信息
-
-- [python-dotenv文档](https://python-dotenv.readthedocs.io/)
-- [十二因子应用配置](https://12factor.net/config)
-- [环境变量最佳实践](https://blog.bitsrc.io/environment-variables-in-node-js-the-right-way-e18ca6103fa7)
+- [SSL配置说明](./SSL_CONFIG_README.md)
+- [数据库配置类](./database_config.py)
+- [PyMySQL SSL文档](https://pymysql.readthedocs.io/en/latest/user/examples.html#using-ssl-connections)

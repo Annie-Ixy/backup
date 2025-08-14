@@ -118,29 +118,134 @@ class DatabaseConfig:
         print(f"  DB_USERNAME: {os.getenv('DB_USERNAME', '未设置')}")
         print(f"  DB_CHARSET: {os.getenv('DB_CHARSET', '未设置')}")
     
+    def _get_ssl_config(self, db_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        构建SSL配置
+        
+        Args:
+            db_config: 数据库配置字典
+            
+        Returns:
+            SSL配置字典
+        """
+        ssl_mode = os.getenv('DB_SSL_MODE', 'DISABLED').strip()
+        ssl_ca = os.getenv('DB_SSL_CA', '').strip()
+        ssl_cert = os.getenv('DB_SSL_CERT', '').strip()
+        ssl_key = os.getenv('DB_SSL_KEY', '').strip()
+        
+        print(f"SSL配置: ssl_mode={ssl_mode}, ssl_ca={ssl_ca}")
+        
+        if ssl_mode == 'DISABLED':
+            return {}
+        
+        ssl_config = {}
+        
+        # 根据SSL模式设置不同的配置
+        if ssl_mode == 'REQUIRED':
+            # 对于TiDB Cloud，只需要设置ssl=True即可
+            ssl_config['ssl'] = True
+            print("添加SSL参数: ssl = True")
+        elif ssl_mode in ['VERIFY_CA', 'VERIFY_IDENTITY']:
+            ssl_config['ssl'] = True
+            if ssl_ca:
+                resolved_ca_path = self._resolve_ssl_path(ssl_ca)
+                if resolved_ca_path and os.path.exists(resolved_ca_path):
+                    ssl_config['ssl_ca'] = resolved_ca_path
+                    print(f"添加SSL参数: ssl_ca = {resolved_ca_path}")
+                else:
+                    print(f"警告: CA证书文件不存在: {ssl_ca}")
+                    # 如果CA证书不存在，回退到基本SSL
+                    print("回退到基本SSL配置")
+        
+        # 双向SSL认证（可选）
+        if ssl_mode == 'VERIFY_IDENTITY' and ssl_cert and ssl_key:
+            resolved_cert_path = self._resolve_ssl_path(ssl_cert)
+            resolved_key_path = self._resolve_ssl_path(ssl_key)
+            
+            if resolved_cert_path and os.path.exists(resolved_cert_path):
+                ssl_config['ssl_cert'] = resolved_cert_path
+                print(f"添加SSL参数: ssl_cert = {resolved_cert_path}")
+            
+            if resolved_key_path and os.path.exists(resolved_key_path):
+                ssl_config['ssl_key'] = resolved_key_path
+                print(f"添加SSL参数: ssl_key = {resolved_key_path}")
+        
+        return ssl_config
+    
+    def _resolve_ssl_path(self, path: str) -> str:
+        """
+        解析SSL证书文件路径
+        
+        Args:
+            path: 证书文件路径（相对或绝对）
+            
+        Returns:
+            解析后的绝对路径
+        """
+        if os.path.isabs(path):
+            return path
+        
+        # 尝试多种相对路径
+        search_paths = [
+            os.path.join(os.getcwd(), path),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', path),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', path),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
+        ]
+        
+        for search_path in search_paths:
+            if os.path.exists(search_path):
+                return os.path.abspath(search_path)
+        
+        return path
+    
+    def _create_safe_connection_params(self, db_config: Dict[str, Any], ssl_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        创建安全的连接参数（隐藏敏感信息）
+        
+        Args:
+            db_config: 数据库配置
+            ssl_config: SSL配置
+            
+        Returns:
+            安全的连接参数字典
+        """
+        # 合并配置
+        connection_params = {**db_config, **ssl_config}
+        
+        # 隐藏敏感信息用于调试输出
+        safe_params = connection_params.copy()
+        if 'password' in safe_params:
+            safe_params['password'] = '***'
+        if 'ssl_key' in safe_params:
+            safe_params['ssl_key'] = '***'
+        
+        print(f"连接参数: {safe_params}")
+        return connection_params
+    
     def get_database_config(self, db_name: str = 'mkt') -> Dict[str, Any]:
         """
         获取数据库配置
         现在数据库配置完全从环境变量读取(.env文件)
         cfg.yaml文件专用于业务配置
         """
-        # 从环境变量获取配置
+        # 从环境变量获取配置，自动去除多余空格
         env_config = {
-            'host': os.getenv('DB_HOST', '10.51.32.12'),  # 使用你提供的IP地址作为默认值
+            'host': os.getenv('DB_HOST', '10.51.32.12').strip(),  # 去除空格
             'port': int(os.getenv('DB_PORT', 4000)),
-            'database': os.getenv('DB_DATABASE', 'mkt'),  # 默认使用mkt数据库
-            'username': os.getenv('DB_USERNAME', 'root'),  # 提供默认用户名
-            'password': os.getenv('DB_PASSWORD', ''),      # 密码必须设置
-            'charset': os.getenv('DB_CHARSET', 'utf8mb4')
+            'database': os.getenv('DB_DATABASE', 'mkt').strip(),  # 去除空格
+            'username': os.getenv('DB_USERNAME', 'root').strip(),  # 去除空格
+            'password': os.getenv('DB_PASSWORD', '').strip(),      # 去除空格
+            'charset': os.getenv('DB_CHARSET', 'utf8mb4').strip()  # 去除空格
         }
         
-        # 调试信息：打印环境变量值
+        # 调试信息：打印环境变量值（去除空格后）
         print(f"调试 - 环境变量读取结果:")
-        print(f"  DB_HOST: {os.getenv('DB_HOST')}")
-        print(f"  DB_PORT: {os.getenv('DB_PORT')}")
-        print(f"  DB_DATABASE: {os.getenv('DB_DATABASE')}")
-        print(f"  DB_USERNAME: {os.getenv('DB_USERNAME')}")
-        print(f"  DB_CHARSET: {os.getenv('DB_CHARSET')}")
+        print(f"  DB_HOST: '{os.getenv('DB_HOST', '未设置')}'")
+        print(f"  DB_PORT: '{os.getenv('DB_PORT', '未设置')}'")
+        print(f"  DB_DATABASE: '{os.getenv('DB_DATABASE', '未设置')}'")
+        print(f"  DB_USERNAME: '{os.getenv('DB_USERNAME', '未设置')}'")
+        print(f"  DB_CHARSET: '{os.getenv('DB_CHARSET', '未设置')}'")
         print(f"  最终配置: {env_config}")
         
         # 验证必需的环境变量
@@ -148,7 +253,7 @@ class DatabaseConfig:
             raise ValueError(
                 "数据库配置缺失！请检查 .env 文件中的以下变量：\n"
                 "DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE\n"
-                f"当前配置: host={env_config['host']}, username={env_config['username']}, password={'已设置' if env_config['password'] else '未设置'}"
+                f"当前配置: host='{env_config['host']}', username='{env_config['username']}', password={'已设置' if env_config['password'] else '未设置'}"
             )
         
         # 确保charset不为None，如果环境变量中没有设置，使用默认值
@@ -159,7 +264,7 @@ class DatabaseConfig:
         return env_config
     
     def get_connection(self):
-        """获取数据库连接，支持自动重连"""
+        """获取数据库连接，支持自动重连和SSL"""
         if self.connection is None or not self._is_connection_alive():
             # 关闭旧连接
             self.close_connection()
@@ -167,32 +272,77 @@ class DatabaseConfig:
             # 创建新连接，增加超时和重连设置
             db_config = self.get_database_config()
             
+            # 获取SSL配置
+            ssl_config = self._get_ssl_config(db_config)
+            
+            # 创建连接参数
+            connection_params = self._create_safe_connection_params(db_config, ssl_config)
+            
             # 确保charset有有效值
-            charset = db_config.get('charset', 'utf8mb4')
+            charset = connection_params.get('charset', 'utf8mb4')
             if not charset:
                 charset = 'utf8mb4'
                 print("警告: 字符集配置无效，使用默认值: utf8mb4")
             
+            # 准备PyMySQL连接参数
+            pymysql_params = {
+                'host': connection_params.get('host', 'localhost'),
+                'port': connection_params.get('port', 4000),
+                'user': connection_params.get('username', 'root'),
+                'password': connection_params.get('password', ''),
+                'database': connection_params.get('database', 'mkt'),
+                'charset': charset,
+                'autocommit': True,
+                'cursorclass': pymysql.cursors.DictCursor,
+                # 连接超时设置
+                'connect_timeout': 30,        # 连接超时30秒
+                'read_timeout': 60,           # 读取超时60秒
+                'write_timeout': 60,          # 写入超时60秒
+                # 保持连接活跃
+                'init_command': "SET SESSION wait_timeout=3600"  # 1小时会话超时
+            }
+            
+            # 添加SSL配置
+            if ssl_config:
+                if 'ssl' in ssl_config and ssl_config['ssl']:
+                    # 对于TiDB Cloud，使用基本的SSL配置
+                    # PyMySQL期望ssl参数是一个字典，而不是布尔值
+                    pymysql_params['ssl'] = {}
+                    print("添加SSL参数: ssl = {}")
+                
+                # 添加其他SSL参数（如果存在）
+                for key, value in ssl_config.items():
+                    if key.startswith('ssl_') and key != 'ssl':
+                        pymysql_params[key] = value
+                        print(f"添加SSL参数: {key} = {value}")
+            
+            # 特殊处理：如果环境变量中有SSL_CA，直接添加到连接参数
+            ssl_ca = os.getenv('DB_SSL_CA', '')
+            if ssl_ca:
+                resolved_ca_path = self._resolve_ssl_path(ssl_ca)
+                if resolved_ca_path and os.path.exists(resolved_ca_path):
+                    pymysql_params['ssl_ca'] = resolved_ca_path
+                    print(f"添加SSL参数: ssl_ca = {resolved_ca_path}")
+                else:
+                    print(f"警告: CA证书文件不存在: {ssl_ca}")
+            
+            # 确保SSL参数存在（TiDB Cloud要求）
+            if 'ssl' not in pymysql_params:
+                pymysql_params['ssl'] = {}
+                print("强制添加SSL参数: ssl = {} (TiDB Cloud要求)")
+            
+            # 调试：打印最终的连接参数（隐藏敏感信息）
+            debug_params = pymysql_params.copy()
+            if 'password' in debug_params:
+                debug_params['password'] = '***'
+            print(f"最终PyMySQL连接参数: {debug_params}")
+            
             try:
-                self.connection = pymysql.connect(
-                    host=db_config.get('host', 'localhost'),
-                    port=db_config.get('port', 4000),
-                    user=db_config.get('username', 'root'),
-                    password=db_config.get('password', ''),
-                    database=db_config.get('database', 'mkt'),
-                    charset=charset,
-                    autocommit=True,
-                    cursorclass=pymysql.cursors.DictCursor,
-                    # 连接超时设置
-                    connect_timeout=30,        # 连接超时30秒
-                    read_timeout=60,           # 读取超时60秒
-                    write_timeout=60,          # 写入超时60秒
-                    # 保持连接活跃，注意：ping_interval不是pymysql的标准参数
-                    init_command="SET SESSION wait_timeout=3600"  # 1小时会话超时
-                )
-                print(f"数据库连接成功: {db_config.get('host')}:{db_config.get('port')}")
+                self.connection = pymysql.connect(**pymysql_params)
+                print(f"数据库连接成功: {connection_params.get('host')}:{connection_params.get('port')}")
             except Exception as e:
                 print(f"数据库连接失败: {e}")
+                print(f"连接参数: {debug_params}")
                 raise
         return self.connection
     
@@ -220,8 +370,28 @@ class DatabaseConfig:
         """
         try:
             connection = self.get_connection()
-            result = pd.read_sql(sql, connection, params=params)
-            return result
+            
+            # 在Docker环境中，pandas可能无法正确处理PyMySQL连接
+            # 使用cursor执行查询，然后转换为DataFrame
+            with connection.cursor() as cursor:
+                cursor.execute(sql, params)
+                rows = cursor.fetchall()
+                
+                if not rows:
+                    # 如果没有结果，返回空的DataFrame
+                    return pd.DataFrame()
+                
+                # 获取列名
+                if cursor.description:
+                    columns = [desc[0] for desc in cursor.description]
+                else:
+                    # 如果没有列描述，使用默认列名
+                    columns = [f'col_{i}' for i in range(len(rows[0]) if rows else 0)]
+                
+                # 创建DataFrame
+                df = pd.DataFrame(rows, columns=columns)
+                return df
+                
         except Exception as e:
             print(f"SQL查询执行失败: {e}")
             raise
