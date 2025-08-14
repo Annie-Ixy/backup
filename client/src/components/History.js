@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Tag, message, Space } from 'antd';
-import { HistoryOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Tag, message } from 'antd';
+import { api } from '../utils/request';
+import { HistoryOutlined, ReloadOutlined } from '@ant-design/icons';
 
 
 
@@ -65,7 +66,7 @@ const History = () => {
   const loadUploadHistory = async () => {
     setUploadsLoading(true);
     try {
-      const response = await fetch('/customer-service/api/uploads/history');
+      const response = await api.get('/socialmedia/api/uploads/history');
       const result = await response.json();
       
       if (result.success) {

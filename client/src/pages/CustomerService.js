@@ -25,7 +25,7 @@ import {
 
 function CustomerService() {
   const navigate = useNavigate();
-  const username = localStorage.getItem('username') || '用户';
+  const username = localStorage.getItem('username') || 'User';
   
      // 表单状态
    const [formData, setFormData] = useState({

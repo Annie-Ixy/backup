@@ -290,8 +290,8 @@ const VoiceCloning = () => {
                 <Award className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">语音克隆 AI</h1>
-                <p className="text-sm text-gray-500">使用AI技术克隆语音并生成自然语音，打造个性化语音体验</p>
+                <h1 className="text-2xl font-bold text-gray-900">语音生成 AI</h1>
+                <p className="text-sm text-gray-500">使用AI技术语音生成自然语音，打造个性化语音体验</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -507,14 +507,14 @@ const VoiceCloning = () => {
         </main>
 
         {/* Footer */}
-        <footer>
+        {/* <footer>
           <p>
             <Zap className="footer-icon" /> 
             <span>{t('footer-text')}</span>
             <Heart className="footer-icon heart" />
             <span>{t('footer-text-2')}</span>
           </p>
-        </footer>
+        </footer> */}
       </div>
     </div>
   );

@@ -40,6 +40,9 @@ import { importToDatabase, getDatabaseStatus, testDatabaseConnection } from '../
 import Toast from '../components/Toast';
 import TagEditor from '../components/TagEditor';
 import LoadingScreen from '../components/LoadingScreen';
+import downloadFile from '../components/downloadFile.ts';
+import { Button } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 
 // import { isLogin } from '../utils/index.ts';
 
@@ -2074,84 +2077,98 @@ const QuestionnaireAnalysis = () => {
 
                {/* Page Tabs */}
                <div className="border-b border-gray-200">
-              <div className="flex space-x-1 px-8 pt-6">
-                <button
-                  className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'upload'
-                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  onClick={() => setPageTab('upload')}
+              <div className="flex justify-between items-center px-8 pt-6">
+                <div className="flex space-x-1">
+                  <button
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'upload'
+                        ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`}
+                    onClick={() => setPageTab('upload')}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Upload className="w-4 h-4" />
+                      文件上传
+                    </div>
+                  </button>
+                  <button
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'question-selector'
+                        ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`}
+                    onClick={() => setPageTab('question-selector')}
+                    disabled={loading || !analysisId || openEndedQuestions.length === 0}
+                  >
+                    <div className="flex items-center gap-2">
+                      <CheckSquare className="w-4 h-4" />
+                      选择开放题
+                    </div>
+                  </button>
+                  <button
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'translation'
+                        ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`}
+                    onClick={() => setPageTab('translation')}
+                    disabled={loading || !analysisId}
+                  >
+                    <div className="flex items-center gap-2">
+                      <MessageCircle className="w-4 h-4" />
+                      翻译处理
+                    </div>
+                  </button>
+                  <button
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'function-selector'
+                        ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`}
+                    onClick={() => setPageTab('function-selector')}
+                    disabled={loading || !analysisId || !translationCompleted}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Target className="w-4 h-4" />
+                      功能选择
+                    </div>
+                  </button>
+                  <button
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'config'
+                        ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`}
+                    onClick={() => setPageTab('config')}
+                    disabled={loading || !analysisId}
+                  >
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4" />
+                      {/* 分析配置(旧)
+                    </div>
+                  </button>
+                  <button
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'results'
+                        ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`}
+                    onClick={() => setPageTab('results')}
+                    disabled={loading || !analysisId}
+                  >
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4" /> */}
+                      统计分析(即将上线)
+                    </div>
+                  </button>
+                </div>
+                
+                {/* 示例文件下载按钮 */}
+                <Button 
+                  type="primary" 
+                  onClick={() => downloadFile('问卷示例文件.xlsx')} 
+                  shape="round" 
+                  icon={<DownloadOutlined />} 
+                  size="middle"
+                  className="bg-blue-600 hover:bg-blue-700 border-blue-600"
                 >
-                  <div className="flex items-center gap-2">
-                    <Upload className="w-4 h-4" />
-                    文件上传
-                  </div>
-                </button>
-                <button
-                  className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'question-selector'
-                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  onClick={() => setPageTab('question-selector')}
-                  disabled={loading || !analysisId || openEndedQuestions.length === 0}
-                >
-                  <div className="flex items-center gap-2">
-                    <CheckSquare className="w-4 h-4" />
-                    选择开放题
-                  </div>
-                </button>
-                <button
-                  className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'translation'
-                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  onClick={() => setPageTab('translation')}
-                  disabled={loading || !analysisId}
-                >
-                  <div className="flex items-center gap-2">
-                    <MessageCircle className="w-4 h-4" />
-                    翻译处理
-                  </div>
-                </button>
-                <button
-                  className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'function-selector'
-                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  onClick={() => setPageTab('function-selector')}
-                  disabled={loading || !analysisId || !translationCompleted}
-                >
-                  <div className="flex items-center gap-2">
-                    <Target className="w-4 h-4" />
-                    功能选择
-                  </div>
-                </button>
-                <button
-                  className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'config'
-                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  onClick={() => setPageTab('config')}
-                  disabled={loading || !analysisId}
-                >
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" />
-                    {/* 分析配置(旧)
-                  </div>
-                </button>
-                <button
-                  className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${pageTab === 'results'
-                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  onClick={() => setPageTab('results')}
-                  disabled={loading || !analysisId}
-                >
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" /> */}
-                    统计分析
-                  </div>
-                </button>
+                  示例文件
+                </Button>
               </div>
             </div>
 
@@ -2171,6 +2188,8 @@ const QuestionnaireAnalysis = () => {
                       exit={{ opacity: 0, x: -20 }}
                       transition={{ duration: 0.3 }}
                     >
+
+
                       {/* 拖拽上传区域 */}
                       <div className="space-y-6">
                         {!file ? (
@@ -2190,7 +2209,7 @@ const QuestionnaireAnalysis = () => {
                                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
                                   上传问卷数据文件
                                 </h3>
-                                <p className="text-gray-600 mb-4">
+                                <p className="text-sm text-gray-600 mb-4">
                                   拖拽文件到此处，或点击选择文件
                                 </p>
                                 <p className="text-sm text-gray-500">

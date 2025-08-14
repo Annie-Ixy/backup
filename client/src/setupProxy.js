@@ -72,7 +72,7 @@ module.exports = function(app) {
     app.use(
       '/socialmedia',
       createProxyMiddleware({
-        target: 'http://10.53.184.254:9002',
+        target: 'http://127.0.0.1:9002',
         changeOrigin: true,
         pathRewrite: {
           '^/socialmedia': '', // 移除 /socialmedia 前缀

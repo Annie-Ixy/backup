@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { Upload as AntUpload, Button, Card, message, Progress, Alert, Divider, Steps } from 'antd';
-import { UploadOutlined, InboxOutlined, CheckCircleOutlined, PlayCircleOutlined, LoadingOutlined } from '@ant-design/icons';
+import { UploadOutlined, InboxOutlined, CheckCircleOutlined, PlayCircleOutlined, LoadingOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/request';
-import { ArrowLeft, LogOut, User, TrendingUp, BarChartOutlined, HistoryOutlined } from 'lucide-react';
+import { ArrowLeft, LogOut, User, TrendingUp, BarChart3, Heart, Globe, Plus } from 'lucide-react';
 import Analysis from '../components/Analysis';
 import History from '../components/History';
+import downloadFile from '../components/downloadFile.ts';
 
 const { Dragger } = AntUpload;
 
-const Upload = () => {
+const Socialmedia = () => {
   const navigate = useNavigate();
   const [fileList, setFileList] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -279,7 +280,7 @@ const Upload = () => {
                 <TrendingUp className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Dash Social数据处理</h1>
+                <h1 className="text-2xl font-bold text-gray-900">社交媒体数据分析</h1>
                 <p className="text-sm text-gray-500">上传社交媒体数据文件，进行数据去重和AI分析</p>
               </div>
             </div>
@@ -300,7 +301,7 @@ const Upload = () => {
         </div>
       </header>
       
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tabs导航 */}
         <Card style={{ marginBottom: '24px' }}>
           <div className="flex items-center space-x-8 border-b border-gray-200">
@@ -312,7 +313,7 @@ const Upload = () => {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <TrendingUp className="w-4 h-4" />
+              <BarChart3 className="w-4 h-4" />
               <span>Dash Social</span>
             </button>
             
@@ -324,9 +325,9 @@ const Upload = () => {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <div className="w-4 h-4 text-red-500">❤</div>
+              <Heart className="w-4 h-4 text-red-500" />
               <span>小红书</span>
-              <span className="text-orange-500 text-xs">(开发中)</span>
+              <span className="text-black-500 text-xs">(即将上线)</span>
             </button>
             
             <button
@@ -337,9 +338,9 @@ const Upload = () => {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <div className="w-4 h-4 text-orange-500">🌐</div>
+              <Globe className="w-4 h-4 text-blue-500" />
               <span>Reddit</span>
-              <span className="text-orange-500 text-xs">(开发中)</span>
+              <span className="text-black-500 text-xs">(即将上线)</span>
             </button>
             
             <button
@@ -350,9 +351,9 @@ const Upload = () => {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <div className="w-4 h-4 text-green-500">+</div>
+              <Plus className="w-4 h-4 text-green-500" />
               <span>宠物网站</span>
-              <span className="text-orange-500 text-xs">(开发中)</span>
+              <span className="text-black-500 text-xs">(即将上线)</span>
             </button>
           </div>
         </Card>
@@ -390,7 +391,24 @@ const Upload = () => {
           <>
             {/* 数据上传组件 */}
             {activeNav === 'upload' && (
-              <Card title="Dash Social数据处理" style={{ marginBottom: '24px' }}>
+              <Card 
+                title={
+                  <div className="flex items-center justify-between">
+                    <span>Dash Social数据处理</span>
+                    <Button 
+                      type="primary" 
+                      onClick={() => downloadFile('DashSocial示例文件_June(1-100).xlsx')} 
+                      shape="round" 
+                      icon={<DownloadOutlined />} 
+                      size="small"
+                      className="bg-blue-600 hover:bg-blue-700 border-blue-600"
+                    >
+                      示例文件
+                    </Button>
+                  </div>
+                } 
+                style={{ marginBottom: '24px' }}
+              >
                 <p>上传Excel或CSV格式的社交媒体数据文件，然后进行数据去重和AI分析</p>
                 
                 {/* 步骤指示器 */}
@@ -600,4 +618,4 @@ const Upload = () => {
   );
 };
 
-export default Upload;
+export default Socialmedia;

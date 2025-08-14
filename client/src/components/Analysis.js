@@ -169,7 +169,7 @@ const Analysis = () => {
           {analysisResult.brand_mentions && (
             <Card title="品牌提及分析" style={{ marginTop: '24px' }}>
               <div style={{ textAlign: 'center', padding: '20px' }}>
-                <p>品牌提及分析结果（待开发）</p>
+                <p>品牌提及分析结果（即将上线）</p>
               </div>
             </Card>
           )}

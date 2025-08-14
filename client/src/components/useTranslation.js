@@ -37,8 +37,8 @@ export const useTranslation = () => {
       'download-btn': 'Download Audio',
       
       // Footer
-      'footer-text': 'Powered by ElevenLabs API • Made with ',
-      'footer-text-2': ' for creators',
+      'footer-text': '',
+      'footer-text-2': '',
       
       // Status Messages
       'status-loading-voices': 'Loading voices...',
@@ -80,8 +80,8 @@ export const useTranslation = () => {
       'download-btn': '下载音频',
       
       // Footer
-      'footer-text': '由 ElevenLabs API 提供支持 • 用',
-      'footer-text-2': '为创作者制作',
+      'footer-text': '',
+      'footer-text-2': '',
       
       // Status Messages
       'status-loading-voices': '正在加载声音...',

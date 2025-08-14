@@ -19,6 +19,9 @@ import {
 } from 'lucide-react';
 import DesignFileUpload from '../components/DesignFileUpload';
 import { designReviewApiService } from '../services/designReviewApi';
+import downloadFile from '../components/downloadFile.ts';
+import { Button } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 // import { isLogin } from '../utils/index.ts';
 
 function DesignReview() {
@@ -347,7 +350,6 @@ function DesignReview() {
           </div>
         </motion.div>
       </div>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
@@ -469,7 +471,25 @@ function DesignReview() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                     >
-                      <h2 className="text-xl font-semibold mb-4">上传需要检查的文件</h2>
+                      {/* 示例文件下载 */}
+                      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium text-blue-900 mb-1">参考文件下载</h3>
+                            <p className="text-sm text-blue-700">当前下载文件：图片格式</p>
+                          </div>
+                          <Button 
+                            type="primary" 
+                            onClick={() => downloadFile('设计稿示例.jpeg')} 
+                            shape="round" 
+                            icon={<DownloadOutlined />} 
+                            size="middle"
+                            className="bg-blue-600 hover:bg-blue-700 border-blue-600"
+                          >
+                            示例文件
+                          </Button>
+                        </div>
+                      </div>
                       
                       {error && (
                         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
