@@ -67,10 +67,9 @@ const History = () => {
     setUploadsLoading(true);
     try {
       const response = await api.get('/socialmedia/api/uploads/history');
-      const result = await response.json();
       
-      if (result.success) {
-        setUploadHistory(result.data || []);
+      if (response.success) {
+        setUploadHistory(response.data || []);
       } else {
         message.error('加载上传历史失败');
       }

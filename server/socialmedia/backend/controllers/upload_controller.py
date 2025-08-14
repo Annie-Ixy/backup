@@ -297,15 +297,32 @@ class UploadController:
             from dotenv import load_dotenv
             load_dotenv()
             
-            connection = pymysql.connect(
-                host=os.getenv('DB_HOST'),
-                port=int(os.getenv('DB_PORT')),
-                user=os.getenv('DB_USERNAME'),
-                password=os.getenv('DB_PASSWORD'),
-                database=os.getenv('DB_DATABASE', 'mkt'),
-                charset='utf8mb4',
-                cursorclass=pymysql.cursors.DictCursor
-            )
+            # 获取数据库配置
+            db_config = self.db_config.get_database_config()
+            
+            # 获取SSL配置
+            ssl_config = self.db_config._get_ssl_config(db_config)
+            
+            # 构建连接参数
+            connection_params = {
+                'host': db_config['host'],
+                'port': db_config['port'],
+                'user': db_config['username'],
+                'password': db_config['password'],
+                'database': db_config['database'],
+                'charset': db_config['charset'],
+                'cursorclass': pymysql.cursors.DictCursor,
+                'autocommit': True,
+                'connect_timeout': 30,
+                'read_timeout': 60,
+                'write_timeout': 60
+            }
+            
+            # 添加SSL配置
+            if ssl_config:
+                connection_params.update(ssl_config)
+            
+            connection = pymysql.connect(**connection_params)
             
             sql = """
                 SELECT id, filename, file_size, original_rows, processed_rows, 
