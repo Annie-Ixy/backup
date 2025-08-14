@@ -291,53 +291,38 @@ class UploadController:
             JSON响应
         """
         try:
-            # 查询上传历史 - 使用原生pymysql查询避免DataFrame问题
-            import pymysql
-            import os
-            from dotenv import load_dotenv
-            load_dotenv()
-            
-            # 获取数据库配置
-            db_config = self.db_config.get_database_config()
-            
-            # 获取SSL配置
-            ssl_config = self.db_config._get_ssl_config(db_config)
-            
-            # 构建连接参数
-            connection_params = {
-                'host': db_config['host'],
-                'port': db_config['port'],
-                'user': db_config['username'],
-                'password': db_config['password'],
-                'database': db_config['database'],
-                'charset': db_config['charset'],
-                'cursorclass': pymysql.cursors.DictCursor,
-                'autocommit': True,
-                'connect_timeout': 30,
-                'read_timeout': 60,
-                'write_timeout': 60
-            }
-            
-            # 添加SSL配置
-            if ssl_config:
-                connection_params.update(ssl_config)
-            
-            connection = pymysql.connect(**connection_params)
-            
-            sql = """
-                SELECT id, filename, file_size, original_rows, processed_rows, 
-                       success_rows, error_rows, upload_time, process_start_time,
-                       process_end_time, batch_id, status, error_message, user_upload
-                FROM ods_dash_social_file_upload_logs 
-                ORDER BY upload_time DESC 
-                LIMIT %s
-            """
-            
-            with connection.cursor() as cursor:
-                cursor.execute(sql, (limit,))
-                result = cursor.fetchall()
-            
-            connection.close()
+            # 查询上传历史 - 使用database_config的get_connection方法
+            connection = None
+            try:
+                connection = self.db_config.get_connection()
+                
+                sql = """
+                    SELECT id, filename, file_size, original_rows, processed_rows, 
+                           success_rows, error_rows, upload_time, process_start_time,
+                           process_end_time, batch_id, status, error_message, user_upload
+                    FROM ods_dash_social_file_upload_logs 
+                    ORDER BY upload_time DESC 
+                    LIMIT %s
+                """
+                
+                with connection.cursor() as cursor:
+                    cursor.execute(sql, (limit,))
+                    result = cursor.fetchall()
+                    
+            except Exception as db_error:
+                logger.error(f"数据库连接或查询失败: {db_error}")
+                return jsonify({
+                    'success': False,
+                    'error': '数据库连接失败',
+                    'message': f'无法连接到数据库: {str(db_error)}'
+                }), 500
+            finally:
+                # 安全关闭连接
+                if connection:
+                    try:
+                        connection.close()
+                    except Exception as close_error:
+                        logger.warning(f"关闭数据库连接时出错: {close_error}")
             
             # 处理DataFrame或字典列表
             if result is None:
