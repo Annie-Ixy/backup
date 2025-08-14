@@ -76,24 +76,7 @@ const History = () => {
     } catch (error) {
       console.error('加载上传历史失败:', error);
       // 使用模拟数据
-      setUploadHistory([
-        {
-          key: 1,
-          filename: 'social_data_20240105.xlsx',
-          file_size: 2048000,
-          upload_time: '2024-01-05 14:30:00',
-          status: 'success',
-          original_rows: 1500
-        },
-        {
-          key: 2,
-          filename: 'dash_comments.csv',
-          file_size: 1024000,
-          upload_time: '2024-01-04 10:15:00',
-          status: 'success',
-          original_rows: 800
-        }
-      ]);
+      setUploadHistory([]);
     } finally {
       setUploadsLoading(false);
     }
