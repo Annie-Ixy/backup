@@ -203,18 +203,6 @@ const ToolIcon = ({ type, color }) => {
     // AI工具模块配置
     const aiTools = [
       {
-        id: 'resume',
-        title: '简历筛选',
-        description: '使用AI技术快速分析和排序候选人简历，找到最合适的人才',
-        image: resumeIcon,
-        icon: Upload,
-        iconType: 'resume',
-        color: 'bg-blue-600',
-        hoverColor: 'hover:bg-blue-700',
-        action: handleGoToResume,
-        available: true
-      },
-      {
         id: 'design-review',
         title: '设计稿审核',
         description: '通过AI工具提高设计稿审核准确度和效率，自动检测设计问题',
@@ -297,7 +285,19 @@ const ToolIcon = ({ type, color }) => {
         hoverColor: 'hover:bg-cyan-700',
         action: () => {},
         available: false
-      }
+      },
+      {
+        id: 'resume',
+        title: '简历筛选',
+        description: '使用AI技术快速分析和排序候选人简历，找到最合适的人才',
+        image: resumeIcon,
+        icon: Upload,
+        iconType: 'resume',
+        color: 'bg-blue-600',
+        hoverColor: 'hover:bg-blue-700',
+        action: handleGoToResume,
+        available: true
+      },
     ];
 
     return (
@@ -466,6 +466,30 @@ const ToolIcon = ({ type, color }) => {
             </div>
           </motion.div>
         </main>
+
+        {/* Floating Button */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 1 }}
+          className="fixed right-8 top-1/2 transform -translate-y-1/2 z-50 group"
+        >
+          {/* Tooltip */}
+          <div className="absolute bottom-full mb-3 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+            AI需求收集表
+            {/* Tooltip arrow */}
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-t-4 border-t-gray-900 border-l-4 border-l-transparent border-r-4 border-r-transparent"></div>
+          </div>
+          
+          <button
+            onClick={() => window.open('https://i7uduvdvau.feishu.cn/share/base/form/shrcnXhL5OqG0WTNU1Y05tABXWc', '_blank')}
+            className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-110 border-2 border-white"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </button>
+        </motion.div>
       </div>
     );
   }
