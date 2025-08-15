@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Card, Row, Col, Statistic, Spin, DatePicker, Select, Button, Tooltip } from 'antd';
+import { Card, Row, Col, Statistic, Spin, DatePicker, Select, Button, Tooltip, Empty } from 'antd';
 import { SmileOutlined, FrownOutlined, MehOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import * as echarts from 'echarts';
 
@@ -31,21 +31,25 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
     setHourlyViewMode('aggregated');
   };
 
+  // 确保有默认数据显示
+  const stats = sentimentData?.sentiment_stats || {};
+  const displayStats = {
+    total_comments: stats.total_comments ?? 0,
+    positive_count: stats.positive_count ?? 0,
+    negative_count: stats.negative_count ?? 0,
+    neutral_count: stats.neutral_count ?? 0,
+    positive_rate: stats.positive_rate ?? 0,
+    negative_rate: stats.negative_rate ?? 0,
+    neutral_rate: stats.neutral_rate ?? 0
+  };
+
   // 初始化饼图
   useEffect(() => {
-    if (!sentimentData?.chart_data?.pie_data || loading) return;
+    if (!sentimentData?.chart_data?.pie_data || loading || !displayStats.total_comments) return;
+    if (!pieChartRef.current) return;
 
     const chart = echarts.init(pieChartRef.current);
     const option = {
-      title: {
-        text: '情感分布',
-        left: 'center',
-        top: 20,
-        textStyle: {
-          fontSize: 16,
-          fontWeight: 'bold'
-        }
-      },
       tooltip: {
         trigger: 'item',
         formatter: '{a} <br/>{b}: {c} ({d}%)'
@@ -86,31 +90,23 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
     chart.setOption(option);
 
     return () => chart.dispose();
-  }, [sentimentData, loading, selectedDates, hourlyViewMode]);
+  }, [sentimentData, loading, selectedDates, hourlyViewMode, displayStats.total_comments]);
 
   // 初始化趋势图
   useEffect(() => {
-    if (!sentimentData?.chart_data?.trend_data || loading) return;
+    if (!sentimentData?.chart_data?.trend_data || loading || !displayStats.total_comments) return;
+    if (!trendChartRef.current) return;
 
     const chart = echarts.init(trendChartRef.current);
     const trendData = sentimentData.chart_data.trend_data;
     
     const option = {
-      title: {
-        text: '情感趋势变化',
-        left: 'center',
-        top: 20,
-        textStyle: {
-          fontSize: 16,
-          fontWeight: 'bold'
-        }
-      },
       tooltip: {
         trigger: 'axis'
       },
       legend: {
         data: ['正面', '负面', '中性'],
-        top: 50
+        top: 10
       },
       grid: {
         left: '3%',
@@ -157,25 +153,17 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
     chart.setOption(option);
 
     return () => chart.dispose();
-  }, [sentimentData, loading, selectedDates, hourlyViewMode]);
+  }, [sentimentData, loading, selectedDates, hourlyViewMode, displayStats.total_comments]);
 
   // 初始化渠道对比图
   useEffect(() => {
-    if (!sentimentData?.chart_data?.channel_data || loading) return;
+    if (!sentimentData?.chart_data?.channel_data || loading || !displayStats.total_comments) return;
+    if (!channelChartRef.current) return;
 
     const chart = echarts.init(channelChartRef.current);
     const channelData = sentimentData.chart_data.channel_data;
     
     const option = {
-      title: {
-        text: '各渠道情感对比',
-        left: 'center',
-        top: 20,
-        textStyle: {
-          fontSize: 16,
-          fontWeight: 'bold'
-        }
-      },
       tooltip: {
         trigger: 'axis',
         axisPointer: {
@@ -184,7 +172,7 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
       },
       legend: {
         data: ['正面', '负面', '中性'],
-        top: 50
+        top: 10
       },
       grid: {
         left: '3%',
@@ -224,11 +212,12 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
     chart.setOption(option);
 
     return () => chart.dispose();
-  }, [sentimentData, loading, selectedDates, hourlyViewMode]);
+  }, [sentimentData, loading, selectedDates, hourlyViewMode, displayStats.total_comments]);
 
   // 初始化小时分布图
   useEffect(() => {
-    if (!sentimentData?.chart_data?.hourly_data || loading) return;
+    if (!sentimentData?.chart_data?.hourly_data || loading || !displayStats.total_comments) return;
+    if (!hourlyChartRef.current) return;
 
     const chart = echarts.init(hourlyChartRef.current);
     
@@ -334,21 +323,12 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
     }
     
     const option = {
-      title: {
-        text: chartTitle,
-        left: 'center',
-        top: 20,
-        textStyle: {
-          fontSize: 16,
-          fontWeight: 'bold'
-        }
-      },
       tooltip: {
         trigger: 'axis'
       },
       legend: {
         data: seriesData.map(s => s.name),
-        top: 50,
+        top: 10,
         type: 'scroll',
         orient: selectedDates.length > 1 && hourlyViewMode === 'by_date' ? 'vertical' : 'horizontal',
         right: selectedDates.length > 1 && hourlyViewMode === 'by_date' ? 10 : 'center',
@@ -358,7 +338,7 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
         left: '3%',
         right: selectedDates.length > 1 && hourlyViewMode === 'by_date' ? '25%' : '4%',
         bottom: '3%',
-        top: '20%',
+        top: '15%',
         containLabel: true
       },
       xAxis: {
@@ -373,7 +353,7 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
     chart.setOption(option);
 
     return () => chart.dispose();
-  }, [sentimentData, loading, selectedDates, hourlyViewMode]);
+  }, [sentimentData, loading, selectedDates, hourlyViewMode, displayStats.total_comments]);
 
   if (loading) {
     return (
@@ -413,22 +393,9 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
     );
   }
 
-  const stats = sentimentData.sentiment_stats || {};
-  
   // 调试：打印数据
   console.log('SentimentCharts - sentimentData:', sentimentData);
   console.log('SentimentCharts - stats:', stats);
-  
-  // 确保有默认数据显示
-  const displayStats = {
-    total_comments: stats.total_comments ?? 0,
-    positive_count: stats.positive_count ?? 0,
-    negative_count: stats.negative_count ?? 0,
-    neutral_count: stats.neutral_count ?? 0,
-    positive_rate: stats.positive_rate ?? 0,
-    negative_rate: stats.negative_rate ?? 0,
-    neutral_rate: stats.neutral_rate ?? 0
-  };
   
   // 不使用测试数据，显示真实的查询结果（即使为0）
   console.log('显示真实数据统计:', displayStats);
@@ -822,36 +789,137 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
       {/* 图表展示 */}
       <Row gutter={[24, 24]} style={{ marginBottom: 32 }}>
         <Col span={12}>
-          <Card style={{
-            background: 'rgba(255, 255, 255, 0.95)',
-            borderRadius: '16px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <div ref={pieChartRef} style={{ width: '100%', height: '370px' }} />
+          <Card 
+            title="情感分布"
+            style={{
+              background: 'rgba(255, 255, 255, 0.95)',
+              borderRadius: '16px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              backdropFilter: 'blur(10px)'
+            }}
+            headStyle={{
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(255,255,255,0.9) 100%)',
+              borderRadius: '16px 16px 0 0',
+              border: 'none',
+              padding: '16px 20px'
+            }}
+            bodyStyle={{
+              padding: '20px'
+            }}
+          >
+            {displayStats.total_comments > 0 ? (
+              <div ref={pieChartRef} style={{ width: '100%', height: '330px' }} />
+            ) : (
+              <div style={{ height: '330px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                {/* 饼图占位图案 */}
+                <div style={{
+                  width: '100px',
+                  height: '100px',
+                  borderRadius: '50%',
+                  border: '8px solid #f0f0f0',
+                  borderTop: '8px solid #d9d9d9',
+                  borderRight: '8px solid #bfbfbf',
+                  borderBottom: '8px solid #d9d9d9',
+                  marginBottom: '16px',
+                  opacity: 0.3
+                }}></div>
+                <span style={{ fontSize: '16px', color: '#7f8c8d' }}>
+                  暂无情感分布数据
+                </span>
+              </div>
+            )}
           </Card>
         </Col>
         <Col span={12}>
-          <Card style={{
-            background: 'rgba(255, 255, 255, 0.95)',
-            borderRadius: '16px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <div ref={trendChartRef} style={{ width: '100%', height: '370px' }} />
+          <Card 
+            title="情感趋势变化"
+            style={{
+              background: 'rgba(255, 255, 255, 0.95)',
+              borderRadius: '16px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              backdropFilter: 'blur(10px)'
+            }}
+            headStyle={{
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(255,255,255,0.9) 100%)',
+              borderRadius: '16px 16px 0 0',
+              border: 'none',
+              padding: '16px 20px'
+            }}
+            bodyStyle={{
+              padding: '20px'
+            }}
+          >
+            {displayStats.total_comments > 0 ? (
+              <div ref={trendChartRef} style={{ width: '100%', height: '330px' }} />
+            ) : (
+              <div style={{ height: '330px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                {/* 趋势图占位图案 */}
+                <div style={{ marginBottom: '16px', opacity: 0.3 }}>
+                  <svg width="120" height="80" viewBox="0 0 120 80">
+                    <polyline 
+                      points="10,70 30,40 50,50 70,20 90,30 110,10" 
+                      fill="none" 
+                      stroke="#d9d9d9" 
+                      strokeWidth="3"
+                      strokeDasharray="5,5"
+                    />
+                    <polyline 
+                      points="10,60 30,55 50,35 70,40 90,25 110,15" 
+                      fill="none" 
+                      stroke="#bfbfbf" 
+                      strokeWidth="3"
+                      strokeDasharray="3,3"
+                    />
+                  </svg>
+                </div>
+                <span style={{ fontSize: '16px', color: '#7f8c8d' }}>
+                  暂无情感趋势变化数据
+                </span>
+              </div>
+            )}
           </Card>
         </Col>
         <Col span={12}>
-          <Card style={{
-            background: 'rgba(255, 255, 255, 0.95)',
-            borderRadius: '16px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <div ref={channelChartRef} style={{ width: '100%', height: '370px' }} />
+          <Card 
+            title="各渠道情感对比"
+            style={{
+              background: 'rgba(255, 255, 255, 0.95)',
+              borderRadius: '16px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              backdropFilter: 'blur(10px)'
+            }}
+            headStyle={{
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(255,255,255,0.9) 100%)',
+              borderRadius: '16px 16px 0 0',
+              border: 'none',
+              padding: '16px 20px'
+            }}
+            bodyStyle={{
+              padding: '20px'
+            }}
+          >
+            {displayStats.total_comments > 0 ? (
+              <div ref={channelChartRef} style={{ width: '100%', height: '330px' }} />
+            ) : (
+              <div style={{ height: '330px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                {/* 柱状图占位图案 */}
+                <div style={{ marginBottom: '16px', opacity: 0.3 }}>
+                  <svg width="120" height="80" viewBox="0 0 120 80">
+                    <rect x="10" y="40" width="15" height="35" fill="#f0f0f0" />
+                    <rect x="30" y="25" width="15" height="50" fill="#d9d9d9" />
+                    <rect x="50" y="35" width="15" height="40" fill="#bfbfbf" />
+                    <rect x="70" y="20" width="15" height="55" fill="#f0f0f0" />
+                    <rect x="90" y="30" width="15" height="45" fill="#d9d9d9" />
+                  </svg>
+                </div>
+                <span style={{ fontSize: '16px', color: '#7f8c8d' }}>
+                  暂无各渠道情感对比数据
+                </span>
+              </div>
+            )}
           </Card>
         </Col>
         <Col span={12}>
@@ -875,47 +943,49 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
                   }} />
                   24小时分布
                 </span>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Select
-                    size="small"
-                    value={hourlyViewMode}
-                    onChange={setHourlyViewMode}
-                    style={{ width: 100 }}
-                    options={[
-                      { value: 'aggregated', label: '汇总' },
-                      { value: 'by_date', label: '按日期' }
-                    ]}
-                  />
-                  {hourlyViewMode === 'by_date' && (
-                    <>
-                      <Select
-                        mode="multiple"
-                        size="small"
-                        placeholder={getAvailableDates().length > 0 ? "选择日期" : "暂无可用日期"}
-                        value={selectedDates}
-                        onChange={handleDateSelectionChange}
-                        style={{ minWidth: 150, maxWidth: 200 }}
-                        options={getAvailableDates().map(date => ({ value: date, label: date }))}
-                        maxTagCount={2}
-                        maxTagTextLength={8}
-                        disabled={getAvailableDates().length === 0}
-                        allowClear
-                      />
-                      {selectedDates.length > 0 && (
-                        <Tooltip title="清除日期选择">
-                          <Button 
-                            size="small" 
-                            type="text" 
-                            onClick={handleClearDates}
-                            style={{ padding: '0 4px' }}
-                          >
-                            重置
-                          </Button>
-                        </Tooltip>
-                      )}
-                    </>
-                  )}
-                </div>
+                {displayStats.total_comments > 0 && (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Select
+                      size="small"
+                      value={hourlyViewMode}
+                      onChange={setHourlyViewMode}
+                      style={{ width: 100 }}
+                      options={[
+                        { value: 'aggregated', label: '汇总' },
+                        { value: 'by_date', label: '按日期' }
+                      ]}
+                    />
+                    {hourlyViewMode === 'by_date' && (
+                      <>
+                        <Select
+                          mode="multiple"
+                          size="small"
+                          placeholder={getAvailableDates().length > 0 ? "选择日期" : "暂无可用日期"}
+                          value={selectedDates}
+                          onChange={handleDateSelectionChange}
+                          style={{ minWidth: 150, maxWidth: 200 }}
+                          options={getAvailableDates().map(date => ({ value: date, label: date }))}
+                          maxTagCount={2}
+                          maxTagTextLength={8}
+                          disabled={getAvailableDates().length === 0}
+                          allowClear
+                        />
+                        {selectedDates.length > 0 && (
+                          <Tooltip title="清除日期选择">
+                            <Button 
+                              size="small" 
+                              type="text" 
+                              onClick={handleClearDates}
+                              style={{ padding: '0 4px' }}
+                            >
+                              重置
+                            </Button>
+                          </Tooltip>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             }
             style={{
@@ -935,7 +1005,41 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
               padding: '20px'
             }}
           >
-            <div ref={hourlyChartRef} style={{ width: '100%', height: '370px' }} />
+            {displayStats.total_comments > 0 ? (
+              <div ref={hourlyChartRef} style={{ width: '100%', height: '330px' }} />
+            ) : (
+              <div style={{ height: '330px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                {/* 24小时分布图占位图案 */}
+                <div style={{ marginBottom: '16px', opacity: 0.3 }}>
+                  <svg width="120" height="80" viewBox="0 0 120 80">
+                    <polyline 
+                      points="10,60 20,50 30,55 40,45 50,40 60,35 70,30 80,40 90,45 100,35 110,30" 
+                      fill="none" 
+                      stroke="#52c41a" 
+                      strokeWidth="2"
+                      opacity="0.6"
+                    />
+                    <polyline 
+                      points="10,70 20,65 30,68 40,60 50,58 60,55 70,50 80,60 90,65 100,55 110,50" 
+                      fill="none" 
+                      stroke="#ff4d4f" 
+                      strokeWidth="2"
+                      opacity="0.6"
+                    />
+                    <polyline 
+                      points="10,65 20,58 30,62 40,52 50,49 60,45 70,40 80,50 90,55 100,45 110,40" 
+                      fill="none" 
+                      stroke="#faad14" 
+                      strokeWidth="2"
+                      opacity="0.6"
+                    />
+                  </svg>
+                </div>
+                <span style={{ fontSize: '16px', color: '#7f8c8d' }}>
+                  暂无24小时情感分布数据
+                </span>
+              </div>
+            )}
           </Card>
         </Col>
       </Row>
