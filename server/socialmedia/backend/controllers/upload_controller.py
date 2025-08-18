@@ -19,10 +19,10 @@ from config.database_config import get_db_config
 logger = logging.getLogger(__name__)
 
 class UploadController:
-    """文件上传控制器"""
+    """文件上传控制器 - 支持多用户并发上传"""
     
-    # 类级别的进度跟踪
-    _processing_status = {}  # {batch_id: {'status': 'processing', 'step': 'upload/etl/ai', 'timestamp': datetime}}
+    # 类级别的进度跟踪，按用户隔离
+    _processing_status = {}  # {user_id: {batch_id: {'status': 'processing', 'step': 'upload/etl/ai', 'timestamp': datetime}}}
     
     def __init__(self):
         self.file_processor = SimpleFileProcessor()
@@ -36,25 +36,54 @@ class UploadController:
         return '.' in filename and \
                filename.rsplit('.', 1)[1].lower() in self.allowed_extensions
     
+    def _get_user_id(self, request) -> str:
+        """从请求中获取用户ID，支持多种方式"""
+        # 优先从请求头获取用户ID
+        user_id = request.headers.get('X-User-ID')
+        if user_id:
+            return user_id
+        
+        # 从表单数据获取
+        user_id = request.form.get('user_id')
+        if user_id:
+            return user_id
+        
+        # 从IP地址和User-Agent生成唯一标识
+        ip_address = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
+        user_agent = request.headers.get('User-Agent', 'unknown')
+        user_id = f"{ip_address}_{hash(user_agent) % 10000}"
+        
+        logger.info(f"生成用户ID: {user_id} (基于IP: {ip_address})")
+        return user_id
+    
     @classmethod
-    def _update_processing_status(cls, batch_id: str, status: str, step: str):
-        """更新处理状态"""
-        cls._processing_status[batch_id] = {
+    def _update_processing_status(cls, user_id: str, batch_id: str, status: str, step: str):
+        """更新处理状态（按用户隔离）"""
+        if user_id not in cls._processing_status:
+            cls._processing_status[user_id] = {}
+        
+        cls._processing_status[user_id][batch_id] = {
             'status': status,
             'step': step,
             'timestamp': datetime.now()
         }
-        logger.info(f"更新处理状态: {batch_id} -> {status} ({step})")
+        logger.info(f"更新处理状态: 用户{user_id} - {batch_id} -> {status} ({step})")
     
     @classmethod
-    def _check_processing_conflicts(cls) -> dict:
-        """检查是否有正在处理的任务"""
+    def _check_processing_conflicts(cls, user_id: str) -> dict:
+        """检查指定用户是否有正在处理的任务"""
         current_time = datetime.now()
+        
+        # 如果用户没有任何任务，直接返回空
+        if user_id not in cls._processing_status:
+            return {}
+        
+        user_tasks = cls._processing_status[user_id]
         active_tasks = {}
         
         # 清理超过1小时的旧任务
         expired_tasks = []
-        for batch_id, info in cls._processing_status.items():
+        for batch_id, info in user_tasks.items():
             if (current_time - info['timestamp']).total_seconds() > 3600:  # 1小时
                 expired_tasks.append(batch_id)
             elif info['status'] == 'processing':
@@ -62,20 +91,33 @@ class UploadController:
         
         # 移除过期任务
         for batch_id in expired_tasks:
-            del cls._processing_status[batch_id]
+            del cls._processing_status[user_id][batch_id]
+        
+        # 如果用户没有活跃任务，清理空字典
+        if not cls._processing_status[user_id]:
+            del cls._processing_status[user_id]
             
         return active_tasks
     
     @classmethod
-    def _clear_processing_status(cls, batch_id: str):
-        """清除处理状态"""
-        if batch_id in cls._processing_status:
-            del cls._processing_status[batch_id]
-            logger.info(f"清除处理状态: {batch_id}")
+    def _clear_processing_status(cls, user_id: str, batch_id: str):
+        """清除指定用户的处理状态"""
+        if user_id in cls._processing_status and batch_id in cls._processing_status[user_id]:
+            del cls._processing_status[user_id][batch_id]
+            logger.info(f"清除处理状态: 用户{user_id} - {batch_id}")
+            
+            # 如果用户没有其他任务，清理用户记录
+            if not cls._processing_status[user_id]:
+                del cls._processing_status[user_id]
+    
+    @classmethod
+    def get_all_processing_status(cls):
+        """获取所有处理状态（调试接口）"""
+        return cls._processing_status
     
     def handle_upload(self, request):
         """
-        处理文件上传请求
+        处理文件上传请求（支持多用户并发）
         
         Args:
             request: Flask请求对象
@@ -84,24 +126,28 @@ class UploadController:
             JSON响应
         """
         try:
+            # 获取用户ID
+            user_id = self._get_user_id(request)
+            
             # 记录上传请求开始
             logger.info("=" * 50)
-            logger.info("开始处理文件上传请求")
+            logger.info(f"开始处理文件上传请求 - 用户: {user_id}")
             logger.info(f"请求方法: {request.method}")
             logger.info(f"请求URL: {request.url}")
             logger.info(f"Content-Type: {request.content_type}")
             logger.info(f"Content-Length: {request.content_length}")
             
-            # 检查是否有正在处理的任务
-            active_tasks = self._check_processing_conflicts()
+            # 检查该用户是否有正在处理的任务
+            active_tasks = self._check_processing_conflicts(user_id)
             if active_tasks:
                 active_info = list(active_tasks.values())[0]
                 return jsonify({
                     'success': False,
-                    'error': '系统正在处理其他上传任务',
-                    'message': f'当前有任务正在进行{active_info["step"]}阶段，请等待完成后再上传新文件',
+                    'error': '您有任务正在处理中',
+                    'message': f'您当前有任务正在进行{active_info["step"]}阶段，请等待完成后再上传新文件',
                     'active_task_step': active_info['step'],
-                    'timestamp': active_info['timestamp'].isoformat()
+                    'timestamp': active_info['timestamp'].isoformat(),
+                    'user_id': user_id
                 }), 409  # 409 Conflict
             
             # 检查请求中是否有文件
@@ -160,11 +206,11 @@ class UploadController:
             batch_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{unique_id}"
             
             # 更新处理状态为正在上传
-            self._update_processing_status(batch_id, 'processing', 'upload')
+            self._update_processing_status(user_id, batch_id, 'processing', 'upload')
             
             # 处理文件（写入ODS表）
             logger.info(f"开始处理文件到ODS表: {file_path}")
-            success, error_msg, result = self.file_processor.process_file(file_path, original_filename)
+            success, error_msg, result = self.file_processor.process_file(file_path, original_filename, user_id)
             
             if success:
                 logger.info(f"文件上传到ODS成功: {result['batch_id']}")
@@ -188,7 +234,7 @@ class UploadController:
                 }
                 
                 # 处理完成，清除状态
-                self._clear_processing_status(batch_id)
+                self._clear_processing_status(user_id, batch_id)
                 
                 return jsonify({
                     'success': True,
@@ -214,7 +260,7 @@ class UploadController:
                 logger.error(f"批次ID: {batch_id}")
                 logger.error("=" * 50)
                 
-                self._clear_processing_status(batch_id)
+                self._clear_processing_status(user_id, batch_id)
                 try:
                     if os.path.exists(file_path):
                         os.remove(file_path)
@@ -253,8 +299,8 @@ class UploadController:
             
             # 清除处理状态
             if 'batch_id' in locals():
-                self._clear_processing_status(batch_id)
-                logger.info(f"已清除处理状态: {batch_id}")
+                self._clear_processing_status(user_id, batch_id)
+                logger.info(f"已清除处理状态: 用户{user_id} - {batch_id}")
             
             # 清理可能的临时文件
             try:
@@ -483,9 +529,11 @@ class UploadController:
             # 1. 执行ETL处理（ODS → DWD → DWD_AI数据同步）
             logger.info("开始执行ETL处理...")
             
-            # 更新状态为ETL处理中
+            # 更新状态为ETL处理中（注意：这个方法需要user_id参数）
             batch_id = f"etl_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            self._update_processing_status(batch_id, 'processing', 'etl')
+            # 这里暂时使用系统用户ID，实际应该传入具体用户ID
+            system_user_id = "system_etl"
+            self._update_processing_status(system_user_id, batch_id, 'processing', 'etl')
             
             # 根据上传数据量调整批处理大小
             etl_batch_size = min(max(upload_success_rows, 100), 2000)
@@ -506,7 +554,7 @@ class UploadController:
                 logger.info("开始执行AI分析...")
                 
                 # 更新状态为AI分析中
-                self._update_processing_status(batch_id, 'processing', 'ai')
+                self._update_processing_status(system_user_id, batch_id, 'processing', 'ai')
                 
                 # 根据处理成功的数据量调整AI批处理大小
                 ai_batch_size = min(max(etl_result.get('dwd_to_ai_success', 0), 50), 500)
@@ -546,7 +594,7 @@ class UploadController:
         finally:
             # 无论成功失败，都清除处理状态
             if 'batch_id' in locals():
-                self._clear_processing_status(batch_id)
+                self._clear_processing_status(system_user_id, batch_id)
         
         return processing_results
     
@@ -582,8 +630,8 @@ class UploadController:
             
             # 简化ETL状态查询 - 移除不存在的字段
             etl_sql = """
-                SELECT batch_id, status, success_records, failed_records, start_time, end_time, message
-                FROM etl_processing_log 
+                SELECT batch_id, status, success_records, failed_records, start_time, end_time, error_message as message
+                FROM dwd_etl_processing_log 
                 WHERE batch_id LIKE %s
                 ORDER BY start_time DESC
                 LIMIT 5

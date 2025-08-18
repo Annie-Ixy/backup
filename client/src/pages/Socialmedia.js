@@ -58,6 +58,8 @@ const Socialmedia = () => {
   const performUpload = (attempt = 1) => {
     const formData = new FormData();
     formData.append('file', fileList[0]);
+    // 添加用户ID以支持多用户并发
+    formData.append('user_id', username || 'anonymous');
 
     // 模拟上传进度
     const progressInterval = setInterval(() => {
@@ -182,6 +184,7 @@ const Socialmedia = () => {
 
     // 调用分析API
     api.post('/socialmedia/api/analysis/start', {
+      user_id: username || 'anonymous', // 添加用户ID以支持多用户分析
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

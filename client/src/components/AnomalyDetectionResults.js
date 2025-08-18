@@ -287,16 +287,27 @@ const AnomalyDetectionResults = ({ data, loading = false }) => {
           border: 'none',
           padding: '40px',
           textAlign: 'center',
-          backdropFilter: 'blur(10px)'
+          backdropFilter: 'blur(10px)',
+          maxWidth: '500px'
         }}>
-          <Empty 
-            description={
-              <span style={{ fontSize: '16px', color: '#7f8c8d' }}>
-                暂无极端负面评论数据
-              </span>
-            }
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-          />
+          <div style={{ fontSize: '64px', marginBottom: '24px' }}>
+            🚨
+          </div>
+          <h3 style={{ 
+            fontSize: '20px', 
+            fontWeight: '600', 
+            color: '#2c3e50', 
+            margin: '0 0 8px 0' 
+          }}>
+            暂无异常检测数据
+          </h3>
+          <p style={{ 
+            fontSize: '14px', 
+            color: '#7f8c8d', 
+            margin: 0 
+          }}>
+            请先上传数据或检查查询条件
+          </p>
         </Card>
       </div>
     );
@@ -318,28 +329,38 @@ const AnomalyDetectionResults = ({ data, loading = false }) => {
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
           border: 'none',
           padding: '40px',
+          textAlign: 'center',
           backdropFilter: 'blur(10px)',
           maxWidth: '500px'
         }}>
-          <Alert
-            message={
-              <span style={{ fontSize: '18px', fontWeight: '600' }}>
-                分析出错
-              </span>
-            }
-            description={
-              <span style={{ fontSize: '14px' }}>
-                {anomalyData.error}
-              </span>
-            }
-            type="error"
-            showIcon
-            style={{
-              background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
-              border: '1px solid #f87171',
-              borderRadius: '12px'
-            }}
-          />
+          <div style={{ fontSize: '64px', marginBottom: '24px' }}>
+            🚨
+          </div>
+          <h3 style={{ 
+            fontSize: '20px', 
+            fontWeight: '600', 
+            color: '#2c3e50', 
+            margin: '0 0 8px 0' 
+          }}>
+            异常检测分析出错
+          </h3>
+          <p style={{ 
+            fontSize: '14px', 
+            color: '#7f8c8d', 
+            margin: '0 0 16px 0' 
+          }}>
+            请检查数据或稍后重试
+          </p>
+          <div style={{
+            background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+            border: '1px solid #f87171',
+            borderRadius: '12px',
+            padding: '12px',
+            color: '#dc2626',
+            fontSize: '14px'
+          }}>
+            错误: {anomalyData.error}
+          </div>
         </Card>
       </div>
     );
@@ -358,35 +379,62 @@ const AnomalyDetectionResults = ({ data, loading = false }) => {
       padding: '24px',
       fontFamily: '"Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif'
     }}>
-      {/* 页面标题 */}
-      <div style={{ 
-        marginBottom: '32px',
-        textAlign: 'center',
+      {/* 页面标题区域 */}
+      <div style={{
         background: 'rgba(255, 255, 255, 0.95)',
-        borderRadius: '16px',
-        padding: '24px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+        borderRadius: '20px',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
         backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(255, 255, 255, 0.2)'
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        padding: '40px',
+        textAlign: 'center',
+        marginBottom: '32px',
+        position: 'relative',
+        overflow: 'hidden'
       }}>
-        <h1 style={{ 
-          fontSize: '28px', 
-          fontWeight: '600', 
-          color: '#2c3e50',
-          margin: '0 0 8px 0',
-          textShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <AlertOutlined style={{ marginRight: '12px', color: '#e74c3c' }} />
-          异常检测分析
-        </h1>
-        <p style={{ 
-          fontSize: '16px', 
-          color: '#7f8c8d', 
-          margin: 0,
-          fontWeight: '400'
-        }}>
-          基于AI智能分析的极端负面评论检测与统计
-        </p>
+        <div style={{ position: 'relative', zIndex: 2 }}>
+          <h1 style={{
+            fontSize: '36px',
+            fontWeight: '800',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            margin: '0 0 16px 0',
+            letterSpacing: '1px'
+          }}>
+            🚨 异常检测分析
+          </h1>
+          <p style={{
+            fontSize: '16px',
+            color: '#7f8c8d',
+            margin: 0,
+            fontWeight: '500',
+            lineHeight: '1.6'
+          }}>
+            基于AI智能分析的极端负面评论检测与统计
+          </p>
+        </div>
+        <div style={{
+          position: 'absolute',
+          top: -50,
+          right: -50,
+          width: 200,
+          height: 200,
+          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+          borderRadius: '50%',
+          zIndex: 1
+        }} />
+        <div style={{
+          position: 'absolute',
+          bottom: -30,
+          left: -30,
+          width: 150,
+          height: 150,
+          background: 'linear-gradient(135deg, rgba(17, 153, 142, 0.1) 0%, rgba(56, 239, 125, 0.1) 100%)',
+          borderRadius: '50%',
+          zIndex: 1
+        }} />
       </div>
 
       {/* 统计概览 */}

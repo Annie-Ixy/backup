@@ -154,18 +154,11 @@ class DWDAIDashSocialComment:
     ai_sentiment: str = ""  # positive/negative/neutral
     ai_confidence: Optional[float] = None
     ai_processed_at: Optional[datetime] = None
-    ai_error_message: str = ""
     ai_processing_status: str = "pending"  # pending/processing/completed/failed
-    ai_model_version: str = ""
     ai_analysis_batch_id: str = ""
     
     # 极端负面分析字段
     extremely_negative: bool = False
-    
-    # 扩展AI分析字段
-    ai_emotion_details: Optional[Dict[str, Any]] = None
-    ai_keywords: Optional[List[str]] = None
-    ai_summary: str = ""
     
     # 时间字段
     created_at: Optional[datetime] = None
@@ -193,14 +186,9 @@ class DWDAIDashSocialComment:
             'ai_sentiment': self.ai_sentiment,
             'ai_confidence': self.ai_confidence,
             'ai_processed_at': self.ai_processed_at.isoformat() if self.ai_processed_at else None,
-            'ai_error_message': self.ai_error_message,
             'ai_processing_status': self.ai_processing_status,
-            'ai_model_version': self.ai_model_version,
             'ai_analysis_batch_id': self.ai_analysis_batch_id,
             'extremely_negative': self.extremely_negative,
-            'ai_emotion_details': self.ai_emotion_details,
-            'ai_keywords': self.ai_keywords,
-            'ai_summary': self.ai_summary,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

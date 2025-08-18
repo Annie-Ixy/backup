@@ -134,23 +134,20 @@ class ETLProcessor:
             }
     
     def _fetch_ods_data(self, condition: str, limit: int) -> List[Dict[str, Any]]:
-        """获取ODS数据"""
+        """获取ODS数据 - 获取所有原始数据，验证由ETL过程负责"""
         try:
-            # 添加text非空的过滤条件
-            text_filter = "AND text IS NOT NULL AND TRIM(text) != ''"
-            
             sql = f"""
                 SELECT record_id, last_update, brand_label, author_name, channel, 
                        message_type, text, tags, post_link, sentiment, caption, 
                        upload_batch_id, original_row_index, processed_at, created_at
                 FROM ods_dash_social_comments 
-                WHERE {condition} {text_filter}
+                WHERE {condition}
                 ORDER BY record_id ASC
                 LIMIT {limit}
             """
             
             result = self.db_config.execute_query_dict(sql)
-            logger.info(f"获取到 {len(result) if result else 0} 条ODS数据（已过滤text为空的记录）")
+            logger.info(f"获取到 {len(result) if result else 0} 条ODS原始数据")
             
             return result or []
             
@@ -158,44 +155,157 @@ class ETLProcessor:
             logger.error(f"获取ODS数据失败：{e}")
             return []
     
+    def _clean_datetime_field(self, series: pd.Series) -> pd.Series:
+        """
+        ETL层时间字段清洗：严格验证和转换时间格式
+        无效时间将被设置为None，由后续流程过滤
+        
+        Args:
+            series: pandas Series包含时间数据
+            
+        Returns:
+            清洗后的Series，无效时间为None
+        """
+        import re
+        
+        def is_valid_datetime_format(value):
+            """检查是否为有效的日期时间格式"""
+            if pd.isna(value) or value is None:
+                return False
+                
+            value_str = str(value).strip()
+            if not value_str or value_str.lower() in ['nan', 'none', '', 'null']:
+                return False
+            
+            # 定义有效的日期时间格式正则表达式
+            valid_patterns = [
+                # 完整日期时间格式
+                r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}$',  # 2024-01-01 12:34:56
+                r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2}$',           # 2024-01-01 12:34
+                r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}$',                              # 2024-01-01
+                # 允许的其他格式
+                r'^\d{1,2}[-/]\d{1,2}[-/]\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$',  # 01-01-2024 12:34:56
+                r'^\d{1,2}[-/]\d{1,2}[-/]\d{4}\s+\d{1,2}:\d{1,2}$',           # 01-01-2024 12:34
+                r'^\d{1,2}[-/]\d{1,2}[-/]\d{4}$',                              # 01-01-2024
+            ]
+            
+            # 检查是否匹配任一有效格式
+            for pattern in valid_patterns:
+                if re.match(pattern, value_str):
+                    return True
+            
+            # 特别排除明显错误的格式
+            invalid_patterns = [
+                r'^\d{1,2}:\d{1,2}[\.,]\d+$',  # 15:22.1, 03:13.6 等格式
+                r'^\d{1,2}:\d{1,2}$',          # 仅时分格式 15:22
+                r'^\d{1,2}[\.,]\d+$',          # 仅数字格式 25.10.9
+            ]
+            
+            for pattern in invalid_patterns:
+                if re.match(pattern, value_str):
+                    return False
+            
+            return False
+        
+        cleaned_series = series.copy()
+        invalid_count = 0
+        
+        # ETL层：严格验证，无效数据设为None
+        for idx in series.index:
+            value = series.iloc[idx] if idx < len(series) else None
+            
+            if not is_valid_datetime_format(value):
+                cleaned_series.iloc[idx] = None
+                invalid_count += 1
+            else:
+                # 对有效格式尝试转换
+                try:
+                    converted = pd.to_datetime(value, errors='raise')
+                    cleaned_series.iloc[idx] = converted
+                except:
+                    # 转换失败则设为空
+                    cleaned_series.iloc[idx] = None
+                    invalid_count += 1
+        
+        if invalid_count > 0:
+            logger.info(f"ETL时间字段清洗：过滤掉 {invalid_count} 条格式无效的时间数据")
+        
+        return cleaned_series
+    
+    def _clean_data_types(self, df: pd.DataFrame) -> pd.DataFrame:
+        """ETL层数据类型清洗和转换"""
+        # 处理时间字段
+        if 'last_update' in df.columns:
+            df['last_update'] = self._clean_datetime_field(df['last_update'])
+        
+        # 处理文本字段（去除空格、换行等）
+        text_fields = ['text', 'author_name', 'channel', 'brand_label', 'tags', 'caption']
+        for field in text_fields:
+            if field in df.columns:
+                df[field] = df[field].astype(str).str.strip()
+                df[field] = df[field].replace('nan', '')
+                df[field] = df[field].replace('None', '')
+        
+        # 处理数值字段
+        if 'original_row_index' in df.columns:
+            df['original_row_index'] = pd.to_numeric(df['original_row_index'], errors='coerce').fillna(0).astype(int)
+        
+        return df
+    
+    def _validate_required_fields(self, df: pd.DataFrame) -> pd.DataFrame:
+        """ETL层必填字段验证（严格验证）"""
+        original_count = len(df)
+        
+        # 移除文本内容为空的记录
+        if 'text' in df.columns:
+            df = df[(df['text'].notna()) & (df['text'].str.len() > 0) & (df['text'] != 'nan')]
+        
+        # 移除作者名称为空的记录
+        if 'author_name' in df.columns:
+            df = df[(df['author_name'].notna()) & (df['author_name'].str.len() > 0) & (df['author_name'] != 'nan')]
+        
+        # 移除渠道为空的记录
+        if 'channel' in df.columns:
+            df = df[(df['channel'].notna()) & (df['channel'].str.len() > 0) & (df['channel'] != 'nan')]
+        
+        filtered_count = len(df)
+        if filtered_count < original_count:
+            logger.info(f"ETL必填字段验证: 从 {original_count} 行过滤为 {filtered_count} 行")
+        
+        return df
+    
     def _deduplicate_ods_data(self, ods_data: List[Dict[str, Any]]) -> Tuple[List[DWDDashSocialComment], Dict[str, Any]]:
         """
-        对ODS数据进行去重处理
+        ETL层数据处理：清洗、验证、去重
         
-        去重规则：基于DATE(last_update) + brand_label + author_name + channel + text分组，
-                 保留last_update时分秒最晚的记录
-        注意：只处理text非空的记录
+        处理流程：
+        1. 数据类型清洗和转换（时间格式、文本处理）
+        2. 必填字段验证（text、author_name、channel）
+        3. 去重处理：基于DATE(last_update) + brand_label + author_name + channel + text分组，
+                   保留last_update时分秒最晚的记录
         """
         try:
             if not ods_data:
-                return [], {'duplicate_count': 0, 'unique_groups': 0, 'filtered_empty_text': 0}
+                return [], {'duplicate_count': 0, 'unique_groups': 0, 'filtered_empty_text': 0, 'filtered_invalid_date': 0}
             
             # 转换为DataFrame便于处理
             df = pd.DataFrame(ods_data)
             original_count = len(df)
             
-            # 过滤text为空的记录（额外保护）
-            df_filtered = df[
-                (df['text'].notna()) & 
-                (df['text'].astype(str).str.strip() != '') & 
-                (df['text'].astype(str).str.strip() != 'nan')
-            ].copy()
+            # 1. 数据类型清洗和转换
+            df_cleaned = self._clean_data_types(df.copy())
             
-            filtered_empty_text_count = original_count - len(df_filtered)
-            if filtered_empty_text_count > 0:
-                logger.info(f"过滤掉 {filtered_empty_text_count} 条text为空的记录")
+            # 2. 必填字段验证
+            df_validated = self._validate_required_fields(df_cleaned)
             
-            # 处理时间字段
-            df_filtered['last_update'] = pd.to_datetime(df_filtered['last_update'], errors='coerce')
+            # 3. 时间字段最终验证（已在_clean_data_types中处理，这里只过滤None值）
+            df_valid_date = df_validated[df_validated['last_update'].notna()].copy()
             
-            # 过滤last_update为空或日期格式不对的记录
-            df_valid_date = df_filtered[df_filtered['last_update'].notna()].copy()
-            filtered_invalid_date_count = len(df_filtered) - len(df_valid_date)
-            if filtered_invalid_date_count > 0:
-                logger.info(f"过滤掉 {filtered_invalid_date_count} 条last_update无效的记录")
+            # 计算过滤统计
+            filtered_empty_text_count = original_count - len(df_validated)
+            filtered_invalid_date_count = len(df_validated) - len(df_valid_date)
             
-            # 更新总过滤计数
-            total_filtered_count = filtered_empty_text_count + filtered_invalid_date_count
+            logger.info(f"ETL数据清洗统计：原始{original_count}条 → 字段验证后{len(df_validated)}条 → 时间验证后{len(df_valid_date)}条")
             
             if df_valid_date.empty:
                 return [], {
@@ -654,14 +764,13 @@ class ETLProcessor:
         """保存ETL处理日志"""
         try:
             sql = f"""
-                INSERT INTO etl_processing_log 
-                (process_type, batch_id, source_table, target_table, 
-                 total_source_records, processed_records, success_records, 
-                 failed_records, duplicate_records, filtered_empty_text_records,
-                 filtered_invalid_date_records, start_time, status)
+                INSERT INTO dwd_etl_processing_log 
+                (batch_id, step_name, total_source_records, processed_records, 
+                 success_records, failed_records, duplicate_records, 
+                 filtered_empty_text_records, filtered_invalid_date_records, 
+                 start_time, status)
                 VALUES (
-                    '{etl_log.process_type}', '{etl_log.batch_id}', 
-                    '{etl_log.source_table}', '{etl_log.target_table}',
+                    '{etl_log.batch_id}', '{etl_log.process_type}',
                     {etl_log.total_source_records}, {etl_log.processed_records}, 
                     {etl_log.success_records}, {etl_log.failed_records}, 
                     {etl_log.duplicate_records}, {etl_log.filtered_empty_text_records},
@@ -682,7 +791,7 @@ class ETLProcessor:
             duration_str = str(etl_log.duration_seconds) if etl_log.duration_seconds else 'NULL'
             
             sql = f"""
-                UPDATE etl_processing_log SET
+                UPDATE dwd_etl_processing_log SET
                     total_source_records = {etl_log.total_source_records},
                     processed_records = {etl_log.processed_records},
                     success_records = {etl_log.success_records},
@@ -734,10 +843,10 @@ class ETLProcessor:
             
             # 获取最近的ETL日志
             recent_logs_sql = """
-                SELECT process_type, batch_id, status, start_time, end_time, 
+                SELECT step_name as process_type, batch_id, status, start_time, end_time, 
                        success_records, failed_records, duplicate_records,
                        filtered_empty_text_records, filtered_invalid_date_records, error_message
-                FROM etl_processing_log 
+                FROM dwd_etl_processing_log 
                 ORDER BY start_time DESC 
                 LIMIT 10
             """

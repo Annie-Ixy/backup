@@ -316,20 +316,25 @@ class DatabaseConfig:
                         pymysql_params[key] = value
                         print(f"添加SSL参数: {key} = {value}")
             
-            # 特殊处理：如果环境变量中有SSL_CA，直接添加到连接参数
-            ssl_ca = os.getenv('DB_SSL_CA', '')
-            if ssl_ca:
-                resolved_ca_path = self._resolve_ssl_path(ssl_ca)
-                if resolved_ca_path and os.path.exists(resolved_ca_path):
-                    pymysql_params['ssl_ca'] = resolved_ca_path
-                    print(f"添加SSL参数: ssl_ca = {resolved_ca_path}")
-                else:
-                    print(f"警告: CA证书文件不存在: {ssl_ca}")
-            
-            # 确保SSL参数存在（TiDB Cloud要求）
-            if 'ssl' not in pymysql_params:
-                pymysql_params['ssl'] = {}
-                print("强制添加SSL参数: ssl = {} (TiDB Cloud要求)")
+            # 只有在SSL模式不是DISABLED时才处理SSL参数
+            ssl_mode = os.getenv('DB_SSL_MODE', 'DISABLED').strip()
+            if ssl_mode != 'DISABLED':
+                # 特殊处理：如果环境变量中有SSL_CA，直接添加到连接参数
+                ssl_ca = os.getenv('DB_SSL_CA', '')
+                if ssl_ca:
+                    resolved_ca_path = self._resolve_ssl_path(ssl_ca)
+                    if resolved_ca_path and os.path.exists(resolved_ca_path):
+                        pymysql_params['ssl_ca'] = resolved_ca_path
+                        print(f"添加SSL参数: ssl_ca = {resolved_ca_path}")
+                    else:
+                        print(f"警告: CA证书文件不存在: {ssl_ca}")
+                
+                # 确保SSL参数存在（TiDB Cloud要求）
+                if 'ssl' not in pymysql_params:
+                    pymysql_params['ssl'] = {}
+                    print("强制添加SSL参数: ssl = {} (TiDB Cloud要求)")
+            else:
+                print("SSL已完全禁用，不添加任何SSL参数")
             
             # 调试：打印最终的连接参数（隐藏敏感信息）
             debug_params = pymysql_params.copy()
@@ -445,6 +450,10 @@ class DatabaseConfig:
                     cursor.execute(sql, params)
                 return True
             except Exception as e:
+                error_message = str(e)
+                
+                # 如果仍然遇到重复约束错误，可能是旧约束未清理，记录日志
+                
                 print(f"SQL插入执行失败 (尝试 {attempt + 1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     # 重置连接，准备重试
@@ -453,6 +462,8 @@ class DatabaseConfig:
                 else:
                     # 最后一次尝试失败，返回False
                     return False
+    
+
     
     def test_connection(self) -> bool:
         """测试数据库连接"""

@@ -113,6 +113,27 @@ def upload_file():
             'error_type': type(e).__name__
         }), 500
 
+
+
+@app.route('/api/admin/status', methods=['GET'])
+def get_processing_status():
+    """管理接口：获取所有处理状态"""
+    try:
+        status = upload_controller.get_all_processing_status()
+        
+        return jsonify({
+            'success': True,
+            'data': status,
+            'timestamp': datetime.now().isoformat()
+        }), 200
+    except Exception as e:
+        logger.error(f"获取处理状态失败: {e}")
+        return jsonify({
+            'success': False,
+            'error': '获取处理状态失败',
+            'message': str(e)
+        }), 500
+
 @app.route('/api/uploads/history')
 def upload_history():
     """获取上传历史记录"""

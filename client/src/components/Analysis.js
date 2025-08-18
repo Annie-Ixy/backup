@@ -5,6 +5,7 @@ import * as echarts from 'echarts';
 import { api } from '../utils/request';
 import SentimentCharts from '../components/SentimentCharts';
 import AnomalyDetectionResults from './AnomalyDetectionResults';
+import BrandMentionResults from './BrandMentionResults';
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
@@ -165,13 +166,14 @@ const Analysis = () => {
             />
           )}
           
-          {/* 其他分析结果 */}
+          {/* 品牌提及分析结果 */}
           {analysisResult.brand_mentions && (
-            <Card title="品牌提及分析" style={{ marginTop: '24px' }}>
-              <div style={{ textAlign: 'center', padding: '20px' }}>
-                <p>品牌提及分析结果（即将上线）</p>
-              </div>
-            </Card>
+            <div style={{ marginTop: '24px' }}>
+              <BrandMentionResults 
+                brandData={analysisResult.brand_mentions} 
+                loading={false}
+              />
+            </div>
           )}
           
           {/* 异常检测分析 */}

@@ -19,7 +19,15 @@ from utils.csv_helper import CSVHelper
 logger = logging.getLogger(__name__)
 
 class SimpleFileProcessor:
-    """简化的文件处理器 - 只负责ODS层数据接收"""
+    """
+    ODS层文件处理器
+    
+    职责：
+    1. 接收所有原始文件数据，不做任何过滤
+    2. 基本的列名标准化和数据类型转换
+    3. 保留所有原始数据，包括无效和空值
+    4. 数据验证和去重由ETL层负责
+    """
     
     def __init__(self):
         self.db_config = get_db_config()
@@ -151,31 +159,26 @@ class SimpleFileProcessor:
     
     def clean_and_standardize_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        数据清洗和标准化
+        ODS层数据处理：仅做列名标准化，保留所有原始数据
+        数据验证和清洗由ETL过程（ODS→DWD）负责
         """
         try:
             # 创建副本避免修改原数据
-            df_cleaned = df.copy()
+            df_processed = df.copy()
             
-            # 1. 列名标准化（映射中英文列名）
-            df_cleaned = self._standardize_columns(df_cleaned)
+            # 仅做列名标准化（映射中英文列名）
+            df_processed = self._standardize_columns(df_processed)
             
-            # 2. 数据类型转换和清洗
-            df_cleaned = self._clean_data_types(df_cleaned)
-            
-            # 3. 必填字段检查
-            df_cleaned = self._validate_required_fields(df_cleaned)
-            
-            logger.info(f"数据清洗完成：从 {len(df)} 行清洗为 {len(df_cleaned)} 行")
-            return df_cleaned
+            logger.info(f"ODS数据处理完成：保留所有 {len(df_processed)} 行原始数据（列名已标准化）")
+            return df_processed
             
         except Exception as e:
-            logger.error(f"数据清洗失败：{e}")
+            logger.error(f"ODS数据处理失败：{e}")
             # 返回空DataFrame而不是抛出异常
             return pd.DataFrame()
     
     def _standardize_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """标准化列名（包含位置映射）"""
+        """标准化列名（包含位置映射）- ODS层仅做列名映射"""
         logger.info(f"原始列名: {df.columns.tolist()}")
         
         # 创建新的列名映射
@@ -218,136 +221,20 @@ class SimpleFileProcessor:
         df_renamed = df.rename(columns=new_columns)
         logger.info(f"映射后列名: {df_renamed.columns.tolist()}")
         
-        # 确保必要字段存在，不存在则创建空字段
-        required_fields = ['text', 'author_name', 'channel']
-        for field in required_fields:
-            if field not in df_renamed.columns:
-                df_renamed[field] = ''
-                logger.warning(f"缺少必填字段 '{field}'，已创建空字段")
+        # ODS层不创建字段，保持原始数据结构
+        # ETL过程会处理缺失字段的问题
         
         return df_renamed
     
-    def _clean_data_types(self, df: pd.DataFrame) -> pd.DataFrame:
-        """清洗数据类型"""
-        # 处理时间字段
-        if 'last_update' in df.columns:
-            df['last_update'] = self._clean_datetime_field(df['last_update'])
-        
-        # 处理文本字段（去除空格、换行等）
-        text_fields = ['text', 'author_name', 'channel', 'brand_label', 'tags', 'caption']
-        for field in text_fields:
-            if field in df.columns:
-                df[field] = df[field].astype(str).str.strip()
-                df[field] = df[field].replace('nan', '')
-                df[field] = df[field].replace('None', '')
-        
-        # 处理数值字段
-        if 'original_row_index' in df.columns:
-            df['original_row_index'] = pd.to_numeric(df['original_row_index'], errors='coerce').fillna(0).astype(int)
-        
-        return df
+    # 数据类型清洗方法已移除：数据验证和清洗由ETL过程（ODS→DWD）负责
     
-    def _clean_datetime_field(self, series: pd.Series) -> pd.Series:
-        """
-        严格清洗时间字段，将无效格式设置为空值
-        
-        Args:
-            series: pandas Series包含时间数据
-            
-        Returns:
-            清洗后的Series，无效时间为None
-        """
-        import re
-        
-        def is_valid_datetime_format(value):
-            """检查是否为有效的日期时间格式"""
-            if pd.isna(value) or value is None:
-                return False
-                
-            value_str = str(value).strip()
-            if not value_str or value_str.lower() in ['nan', 'none', '', 'null']:
-                return False
-            
-            # 定义有效的日期时间格式正则表达式
-            valid_patterns = [
-                # 完整日期时间格式
-                r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}$',  # 2024-01-01 12:34:56
-                r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2}$',           # 2024-01-01 12:34
-                r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}$',                              # 2024-01-01
-                # 允许的其他格式
-                r'^\d{1,2}[-/]\d{1,2}[-/]\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$',  # 01-01-2024 12:34:56
-                r'^\d{1,2}[-/]\d{1,2}[-/]\d{4}\s+\d{1,2}:\d{1,2}$',           # 01-01-2024 12:34
-                r'^\d{1,2}[-/]\d{1,2}[-/]\d{4}$',                              # 01-01-2024
-            ]
-            
-            # 检查是否匹配任一有效格式
-            for pattern in valid_patterns:
-                if re.match(pattern, value_str):
-                    return True
-            
-            # 特别排除明显错误的格式
-            invalid_patterns = [
-                r'^\d{1,2}:\d{1,2}[\.,]\d+$',  # 15:22.1, 03:13.6 等格式
-                r'^\d{1,2}:\d{1,2}$',          # 仅时分格式 15:22
-                r'^\d{1,2}[\.,]\d+$',          # 仅数字格式 25.10.9
-            ]
-            
-            for pattern in invalid_patterns:
-                if re.match(pattern, value_str):
-                    return False
-            
-            return False
-        
-        cleaned_series = series.copy()
-        invalid_count = 0
-        
-        # 逐个检查每个值
-        for idx in series.index:
-            value = series.iloc[idx] if idx < len(series) else None
-            
-            if not is_valid_datetime_format(value):
-                cleaned_series.iloc[idx] = None
-                invalid_count += 1
-            else:
-                # 对有效格式尝试转换
-                try:
-                    converted = pd.to_datetime(value, errors='raise')
-                    cleaned_series.iloc[idx] = converted
-                except:
-                    # 转换失败则设为空
-                    cleaned_series.iloc[idx] = None
-                    invalid_count += 1
-        
-        if invalid_count > 0:
-            logger.info(f"清洗时间字段：过滤掉 {invalid_count} 条格式无效的时间数据")
-        
-        return cleaned_series
+    # 时间字段处理方法已移除：时间验证和转换由ETL过程（ODS→DWD）负责
     
-    def _validate_required_fields(self, df: pd.DataFrame) -> pd.DataFrame:
-        """验证必填字段（使用更宽松的验证）"""
-        original_count = len(df)
-        
-        # 移除文本内容为空的记录（更宽松的检查）
-        if 'text' in df.columns:
-            df = df[(df['text'].notna()) & (df['text'].str.len() > 0) & (df['text'] != 'nan')]
-        
-        # 移除作者名称为空的记录（更宽松的检查）
-        if 'author_name' in df.columns:
-            df = df[(df['author_name'].notna()) & (df['author_name'].str.len() > 0) & (df['author_name'] != 'nan')]
-        
-        # 移除渠道为空的记录（更宽松的检查）
-        if 'channel' in df.columns:
-            df = df[(df['channel'].notna()) & (df['channel'].str.len() > 0) & (df['channel'] != 'nan')]
-        
-        filtered_count = len(df)
-        if filtered_count < original_count:
-            logger.info(f"必填字段验证: 从 {original_count} 行过滤为 {filtered_count} 行")
-        
-        return df
+    # 必填字段验证方法已移除：数据验证由ETL过程（ODS→DWD）负责
     
     def save_to_ods(self, df: pd.DataFrame, batch_id: str) -> Tuple[int, int]:
         """
-        保存数据到ODS表
+        保存数据到ODS表（优化版 - 静默处理重复数据并输出汇总）
         
         Returns:
             (success_count, error_count)
@@ -356,6 +243,8 @@ class SimpleFileProcessor:
         error_count = 0
         
         try:
+            logger.info(f"开始批量插入 {len(df)} 条数据到ODS表...")
+            
             for index, row in df.iterrows():
                 try:
                     # 创建ODS记录
@@ -385,16 +274,19 @@ class SimpleFileProcessor:
                     # 构建插入SQL
                     sql = self._build_insert_sql(ods_record)
                     
-                    # 执行插入
-                    self.db_config.execute_insert(sql)
-                    success_count += 1
+                    # ODS层允许重复数据，不做重复检查
+                    insert_success = self.db_config.execute_insert(sql)
+                    if insert_success:
+                        success_count += 1
+                    else:
+                        error_count += 1
                     
                 except Exception as e:
                     logger.error(f"保存第 {index} 行数据失败：{e}")
                     error_count += 1
                     continue
             
-            logger.info(f"ODS数据保存完成：成功 {success_count} 条，失败 {error_count} 条")
+            logger.info(f"📊 ODS数据保存完成：成功 {success_count} 条，失败 {error_count} 条")
             return success_count, error_count
             
         except Exception as e:
@@ -451,9 +343,14 @@ class SimpleFileProcessor:
         
         return sql
     
-    def process_file(self, file_path: str, filename: str = None) -> Tuple[bool, str, Dict[str, Any]]:
+    def process_file(self, file_path: str, filename: str = None, user_id: str = None) -> Tuple[bool, str, Dict[str, Any]]:
         """
         处理文件的主入口（简化版）
+        
+        Args:
+            file_path: 文件路径
+            filename: 文件名
+            user_id: 用户ID（支持多用户隔离）
         
         Returns:
             (success, error_message, result_stats)
@@ -474,6 +371,7 @@ class SimpleFileProcessor:
                 file_size=file_size,
                 batch_id=batch_id,
                 upload_time=datetime.now(),
+                user_upload=user_id or "system",  # 设置用户ID
                 process_start_time=datetime.now(),
                 status='processing'
             )

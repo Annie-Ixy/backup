@@ -310,7 +310,7 @@ class BatchAIAnalyzer:
                  message_type, text, tags, post_link, sentiment, caption, 
                  upload_batch_id, original_row_index, dedupe_date, source_count,
                  ai_sentiment, ai_confidence, ai_processed_at, ai_processing_status, 
-                 ai_model_version, ai_analysis_batch_id, created_at)
+                 ai_analysis_batch_id, created_at)
                 VALUES (
                     {dwd_record['record_id']},
                     {format_datetime(dwd_record.get('last_update'))},
@@ -331,7 +331,6 @@ class BatchAIAnalyzer:
                     {confidence},
                     NOW(),
                     'completed',
-                    {escape_sql_string(self.ai_analyzer.model)},
                     {escape_sql_string(batch_id)},
                     NOW()
                 )
@@ -452,21 +451,22 @@ class BatchAIAnalyzer:
     def cleanup_old_analysis_data(self, days: int = 30) -> Dict[str, Any]:
         """清理旧的分析数据（可选功能）"""
         try:
-            # 清理超过指定天数的失败记录的错误信息
+            # 清理超过指定天数的失败记录（不再需要清理错误信息，因为字段已删除）
+            # 可以清理其他过时数据，比如重置失败状态等
             sql = f"""
-                UPDATE dwd_dash_social_comments_ai 
-                SET ai_error_message = ''
+                SELECT COUNT(*) as count
+                FROM dwd_dash_social_comments_ai 
                 WHERE ai_processing_status = 'failed' 
                   AND ai_processed_at < DATE_SUB(NOW(), INTERVAL {days} DAY)
-                  AND ai_error_message != ''
             """
             
-            affected_rows = self.db_config.execute_insert(sql)
+            result = self.db_config.execute_query_dict(sql)
+            old_failed_count = result[0]['count'] if result else 0
             
             return {
                 'status': 'completed',
-                'message': f'清理了 {affected_rows} 条旧错误信息',
-                'cleaned_records': affected_rows
+                'message': f'发现 {old_failed_count} 条超过{days}天的失败记录',
+                'old_failed_records': old_failed_count
             }
             
         except Exception as e:

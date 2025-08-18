@@ -51,8 +51,8 @@ class NewDashAnalyzer:
                 SELECT record_id, dwd_record_id, last_update, brand_label, author_name, 
                        channel, message_type, text, tags, post_link, sentiment, caption, 
                        upload_batch_id, original_row_index, dedupe_date, source_count,
-                       ai_sentiment, ai_confidence, ai_processed_at, ai_error_message, 
-                       ai_processing_status, ai_model_version, ai_analysis_batch_id,
+                       ai_sentiment, ai_confidence, ai_processed_at, 
+                       ai_processing_status, ai_analysis_batch_id,
                        extremely_negative, created_at, updated_at
                 FROM dwd_dash_social_comments_ai 
                 WHERE 1=1
@@ -107,14 +107,20 @@ class NewDashAnalyzer:
     
     def analyze_brand_mentions(self, df: pd.DataFrame, keywords: List[str] = None) -> Dict[str, Any]:
         """
-        1. Brand Mention 品牌提及分析
+        1. Brand Mention 品牌提及分析 (简化版 - 只监控text字段)
         
         Args:
             df: 查询结果DataFrame
             keywords: 分析的关键词列表
             
         Returns:
-            品牌提及分析结果
+            品牌提及分析结果，包含：
+            - summary: 总体统计信息
+            - keyword_analysis: 各关键词详细分析
+                - total_mentions: 提及次数
+                - daily_breakdown: 按日期分布
+                - sentiment_distribution: 情感分布
+                - sample_mentions: 示例内容(最多3条)
         """
         try:
             if df.empty:
@@ -126,21 +132,17 @@ class NewDashAnalyzer:
             brand_analysis = {}
             
             for keyword in analysis_keywords:
-                # 查找包含该关键词的记录
+                # 查找包含该关键词的记录 - 只搜索text字段
                 keyword_pattern = re.compile(keyword, re.IGNORECASE)
                 mentions = df[
-                    df['text'].str.contains(keyword_pattern, regex=True, na=False) |
-                    df['tags'].str.contains(keyword_pattern, regex=True, na=False) |
-                    df['caption'].str.contains(keyword_pattern, regex=True, na=False) |
-                    df['brand_label'].str.contains(keyword_pattern, regex=True, na=False)
+                    df['text'].str.contains(keyword_pattern, regex=True, na=False)
                 ]
                 
                 if len(mentions) == 0:
                     brand_analysis[keyword] = {
                         'total_mentions': 0,
                         'daily_breakdown': {},
-                        'sentiment_distribution': {},
-                        'platforms': {}
+                        'sentiment_distribution': {}
                     }
                     continue
                 
@@ -160,15 +162,11 @@ class NewDashAnalyzer:
                 
                 sentiment_distribution = {k: int(v) for k, v in mentions[sentiment_col].value_counts().to_dict().items()}
                 
-                # 渠道分布统计
-                channels = {k: int(v) for k, v in mentions['channel'].value_counts().to_dict().items()}
-                
                 brand_analysis[keyword] = {
                     'total_mentions': total_mentions,
                     'daily_breakdown': daily_breakdown,
                     'sentiment_distribution': sentiment_distribution,
-                    'channels': channels,
-                    'sample_mentions': mentions[['text', 'last_update', sentiment_col, 'author_name', 'ai_confidence']].head(5).to_dict('records')
+                    'sample_mentions': mentions[['text', 'last_update', sentiment_col, 'author_name']].head(3).to_dict('records')  # 只取前3条，移除ai_confidence
                 }
             
             # 生成总体统计
@@ -430,7 +428,6 @@ class NewDashAnalyzer:
                 # 添加AI置信度信息（如果存在）
                 if sentiment_column == 'ai_sentiment' and 'ai_confidence' in comment and pd.notna(comment['ai_confidence']):
                     comment_detail['confidence'] = float(comment['ai_confidence'])
-                    comment_detail['ai_model'] = comment.get('ai_model_version', '')
                 
                 extreme_negative_details.append(comment_detail)
             

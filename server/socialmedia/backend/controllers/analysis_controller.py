@@ -348,10 +348,36 @@ class AnalysisController:
             logger.info(f"DWD_AI同步完成: {sync_result.get('message', '')}")
             
             # ========== 汇总结果 ==========
+            # 暂时回到基于各阶段实际处理结果的累计统计（确保准确性）
+            # TODO: 后续可优化为基于批次ID的精确查询
             total_ai_success = sum(result.get('success_records', 0) for result in ai_results)
             total_ai_failed = sum(result.get('failed_records', 0) for result in ai_results)
             total_extreme_success = sum(result.get('success_records', 0) for result in extreme_results)
             total_extreme_failed = sum(result.get('failed_records', 0) for result in extreme_results)
+            
+            # 查询最终数据库状态进行验证（避免状态重置导致的不一致）
+            verification_sql = """
+                SELECT 
+                    ai_processing_status,
+                    COUNT(*) as count 
+                FROM dwd_dash_social_comments 
+                WHERE created_at >= %s
+                GROUP BY ai_processing_status
+            """
+            verification_time = (datetime.now() - timedelta(minutes=10)).strftime('%Y-%m-%d %H:%M:%S')
+            verification_result = self.db_config.execute_query_dict(verification_sql, (verification_time,))
+            
+            # 记录验证信息用于调试
+            verification_stats = {}
+            for row in verification_result or []:
+                verification_stats[row.get('ai_processing_status', 'unknown')] = row.get('count', 0)
+            
+            logger.info(f"AI处理结果验证 - 累计统计: 成功{total_ai_success}, 失败{total_ai_failed} | 数据库状态: {verification_stats}")
+            
+            # 如果累计失败数 > 0 但数据库中没有失败记录，使用数据库状态
+            if total_ai_failed > 0 and verification_stats.get('failed', 0) == 0:
+                logger.warning(f"检测到状态不一致：累计失败{total_ai_failed}条，但数据库中无失败记录，使用数据库状态")
+                total_ai_failed = verification_stats.get('failed', 0)
             
             final_result = {
                 'success': True,

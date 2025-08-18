@@ -31,6 +31,124 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
     setHourlyViewMode('aggregated');
   };
 
+  // 渲染评论内容，处理图片链接
+  const renderCommentContent = (text) => {
+    if (!text) return '暂无评论内容';
+
+    // 检查是否包含图片链接（支持各种图片服务和CDN）
+    const imageUrlRegex = /(https?:\/\/[^\s]+(?:\.(jpg|jpeg|png|gif|webp|bmp)|\/[a-zA-Z0-9_-]+\.jpg))/gi;
+    
+    // 特殊处理：包含 amazonaws.com 等图片服务的链接
+    const specialImageServices = [
+      'amazonaws.com',
+      'cloudinary.com', 
+      'imgur.com',
+      'instagram.com',
+      'facebook.com',
+      'dashhudson'
+    ];
+    
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    // 重置正则表达式
+    imageUrlRegex.lastIndex = 0;
+    
+    while ((match = imageUrlRegex.exec(text)) !== null) {
+      const url = match[0];
+      const isImageService = specialImageServices.some(service => url.includes(service));
+      const hasImageExtension = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(url);
+      
+      // 如果是图片扩展名或者是已知的图片服务
+      if (hasImageExtension || isImageService) {
+        // 添加匹配前的文本
+        if (match.index > lastIndex) {
+          parts.push({
+            type: 'text',
+            content: text.slice(lastIndex, match.index)
+          });
+        }
+        
+        // 添加图片
+        parts.push({
+          type: 'image',
+          content: url
+        });
+        
+        lastIndex = match.index + match[0].length;
+      }
+    }
+    
+    // 添加剩余的文本
+    if (lastIndex < text.length) {
+      parts.push({
+        type: 'text',
+        content: text.slice(lastIndex)
+      });
+    }
+    
+    // 如果没有找到图片，返回原始文本
+    if (parts.length === 0) {
+      return <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>;
+    }
+    
+    return parts.map((part, index) => {
+      if (part.type === 'image') {
+        return (
+          <div key={index} style={{ margin: '8px 0' }}>
+            <div style={{ 
+              background: 'rgba(255, 255, 255, 0.9)',
+              borderRadius: '6px',
+              padding: '6px',
+              border: '1px solid rgba(0, 0, 0, 0.1)'
+            }}>
+              <img 
+                src={part.content} 
+                alt="评论图片"
+                style={{
+                  width: '100%',
+                  maxHeight: '150px',
+                  objectFit: 'contain',
+                  borderRadius: '4px',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                  cursor: 'pointer'
+                }}
+                onClick={() => window.open(part.content, '_blank')}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  const container = e.target.parentNode;
+                  container.innerHTML = `
+                    <div style="
+                      text-align: center;
+                      padding: 12px;
+                      color: #666;
+                      background: rgba(0, 0, 0, 0.05);
+                      border-radius: 4px;
+                      border: 1px dashed rgba(0, 0, 0, 0.2);
+                    ">
+                      <div style="margin-bottom: 6px;">🖼️ 图片加载失败</div>
+                      <a href="${part.content}" target="_blank" rel="noopener noreferrer" 
+                         style="color: #1890ff; text-decoration: underline; font-size: 11px;">
+                        点击查看原图
+                      </a>
+                    </div>
+                  `;
+                }}
+              />
+            </div>
+          </div>
+        );
+      }
+      
+      return part.content ? (
+        <span key={index} style={{ whiteSpace: 'pre-wrap' }}>
+          {part.content}
+        </span>
+      ) : null;
+    }).filter(Boolean);
+  };
+
   // 确保有默认数据显示
   const stats = sentimentData?.sentiment_stats || {};
   const displayStats = {
@@ -370,12 +488,11 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
     return (
       <div style={{ 
         background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
-        minHeight: '50vh',
+        minHeight: '100vh',
         padding: '24px',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '16px'
+        justifyContent: 'center'
       }}>
         <Card style={{
           background: 'rgba(255, 255, 255, 0.95)',
@@ -384,10 +501,39 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
           border: 'none',
           padding: '40px',
           textAlign: 'center',
-          backdropFilter: 'blur(10px)'
+          backdropFilter: 'blur(10px)',
+          maxWidth: '500px'
         }}>
-          <p style={{ fontSize: '16px', color: '#7f8c8d' }}>暂无情感分析数据</p>
-          {sentimentData?.error && <p style={{ color: '#e74c3c', fontSize: '14px' }}>错误: {sentimentData.error}</p>}
+          <div style={{ fontSize: '64px', marginBottom: '24px' }}>
+            🎭
+          </div>
+          <h3 style={{ 
+            fontSize: '20px', 
+            fontWeight: '600', 
+            color: '#2c3e50', 
+            margin: '0 0 8px 0' 
+          }}>
+            暂无情感分析数据
+          </h3>
+          <p style={{ 
+            fontSize: '14px', 
+            color: '#7f8c8d', 
+            margin: '0 0 16px 0' 
+          }}>
+            请先上传数据或检查查询条件
+          </p>
+          {sentimentData?.error && (
+            <div style={{
+              background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+              border: '1px solid #f87171',
+              borderRadius: '12px',
+              padding: '12px',
+              color: '#dc2626',
+              fontSize: '14px'
+            }}>
+              错误: {sentimentData.error}
+            </div>
+          )}
         </Card>
       </div>
     );
@@ -1048,21 +1194,53 @@ const SentimentCharts = ({ sentimentData, loading = false }) => {
       {sentimentData.examples && (
         <Row gutter={[16, 16]} style={{ marginTop: '24px' }}>
           <Col span={12}>
-            <Card title="正面评论样例" size="small">
+            <Card title="正面评论样例" size="small" style={{
+              background: 'rgba(255, 255, 255, 0.95)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+              border: '1px solid rgba(82, 196, 26, 0.2)'
+            }}>
               {sentimentData.examples.high_positive?.map((example, index) => (
-                <div key={index} style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#f6ffed', borderRadius: '4px' }}>
-                  <p style={{ margin: 0, fontSize: '14px' }}>{example.text}</p>
-                  <small style={{ color: '#666' }}>作者: {example.author_name} | 时间: {example.last_update}</small>
+                <div key={index} style={{ 
+                  marginBottom: '16px', 
+                  padding: '12px', 
+                  backgroundColor: '#f6ffed', 
+                  borderRadius: '8px',
+                  border: '1px solid rgba(82, 196, 26, 0.2)',
+                  boxShadow: '0 2px 8px rgba(82, 196, 26, 0.1)'
+                }}>
+                  <div style={{ margin: '0 0 8px 0', fontSize: '14px', lineHeight: '1.5', color: '#000000' }}>
+                    {renderCommentContent(example.text)}
+                  </div>
+                  <small style={{ color: '#666', fontSize: '12px' }}>
+                    👤 {example.author_name} | 🕒 {example.last_update}
+                  </small>
                 </div>
               ))}
             </Card>
           </Col>
           <Col span={12}>
-            <Card title="负面评论样例" size="small">
+            <Card title="负面评论样例" size="small" style={{
+              background: 'rgba(255, 255, 255, 0.95)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+              border: '1px solid rgba(255, 77, 79, 0.2)'
+            }}>
               {sentimentData.examples.high_negative?.map((example, index) => (
-                <div key={index} style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#fff2f0', borderRadius: '4px' }}>
-                  <p style={{ margin: 0, fontSize: '14px' }}>{example.text}</p>
-                  <small style={{ color: '#666' }}>作者: {example.author_name} | 时间: {example.last_update}</small>
+                <div key={index} style={{ 
+                  marginBottom: '16px', 
+                  padding: '12px', 
+                  backgroundColor: '#fff2f0', 
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255, 77, 79, 0.2)',
+                  boxShadow: '0 2px 8px rgba(255, 77, 79, 0.1)'
+                }}>
+                  <div style={{ margin: '0 0 8px 0', fontSize: '14px', lineHeight: '1.5', color: '#000000' }}>
+                    {renderCommentContent(example.text)}
+                  </div>
+                  <small style={{ color: '#666', fontSize: '12px' }}>
+                    👤 {example.author_name} | 🕒 {example.last_update}
+                  </small>
                 </div>
               ))}
             </Card>
