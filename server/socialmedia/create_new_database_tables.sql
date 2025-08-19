@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS `dwd_dash_social_comments_ai` (
     KEY `idx_analysis_author_sentiment` (`author_name`,`ai_sentiment`),
     KEY `idx_extremely_negative` (`extremely_negative`),
     KEY `idx_negative_analysis` (`ai_sentiment`,`extremely_negative`),
+    UNIQUE KEY `uk_dwd_record_id` (`dwd_record_id`),
     CONSTRAINT `fk_dwd_ai_dwd_record` FOREIGN KEY (`dwd_record_id`) REFERENCES `dwd_dash_social_comments` (`record_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci 
 COMMENT='DWD_AI层-包含AI分析结果的社交媒体数据';

@@ -726,7 +726,7 @@ class ETLProcessor:
                 return 'NULL'
         
         sql = f"""
-            INSERT INTO dwd_dash_social_comments_ai 
+            INSERT IGNORE INTO dwd_dash_social_comments_ai 
             (dwd_record_id, last_update, brand_label, author_name, channel, 
              message_type, text, tags, post_link, sentiment, caption, 
              upload_batch_id, original_row_index, dedupe_date, source_count,
