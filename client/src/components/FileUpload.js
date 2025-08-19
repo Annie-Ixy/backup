@@ -105,16 +105,16 @@ const FileUpload = ({ onUpload, error, jobDescription, onJobDescriptionChange })
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <div className="mb-6">
+        <div className="mb-1">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl mb-4">
             <Upload className="w-8 h-8 text-white" />
           </div>
         </div>
         
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+        <h1 className="text-xl font-bold text-gray-900 mb-4">
           AI驱动的简历筛选系统
         </h1>
-        <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+        <p className="text-l text-gray-600 mb-8 max-w-2xl mx-auto">
           输入职位描述并上传候选人简历（PDF文件或包含多个PDF的ZIP文件），我们的AI系统将自动分析、评估并排名所有候选人
         </p>
 
