@@ -47,7 +47,7 @@ module.exports = function(app) {
   app.use(
     '/customer-service',
     createProxyMiddleware({
-      target: 'http://localhost:6573',
+      target: 'http://10.53.184.254:6573',
       changeOrigin: true,
       secure: false,
       logLevel: 'debug',
@@ -68,4 +68,17 @@ module.exports = function(app) {
       },
     })
   );
+    // 社媒分析API代理
+    app.use(
+      '/socialmedia',
+      createProxyMiddleware({
+        target: 'http://127.0.0.1:9002',
+        changeOrigin: true,
+        pathRewrite: {
+          '^/socialmedia': '', // 移除 /socialmedia 前缀
+        },
+        secure: true,
+        logLevel: 'debug',
+      })
+    );
 };

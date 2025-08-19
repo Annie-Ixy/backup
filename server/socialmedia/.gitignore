@@ -1,0 +1,43 @@
+# 环境变量配置文件
+.env
+
+# 文件上传目录
+uploads/
+*.csv
+*.xlsx
+*.xls
+
+# 运行日志文件
+logs/
+*.log
+
+# 前端构建和依赖文件
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Python缓存文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Python虚拟环境
+venv/
+env/
+ENV/
+
+# IDE配置文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { DatePicker, Cascader } from 'antd';
 import { customerServiceApi } from '../services/customerServiceApi';
 import { 
   LogOut, 
@@ -13,29 +14,35 @@ import {
   TrendingUp,
   ChevronDown,
   Search,
-  ArrowLeft
+  ArrowLeft,
+  Globe,
+  Smartphone,
+  Settings,
+  Clock,
+  AlertCircle,
+  FileText
 } from 'lucide-react';
 
 function CustomerService() {
   const navigate = useNavigate();
-  const username = localStorage.getItem('username') || '用户';
+  const username = localStorage.getItem('username') || 'User';
   
-  // 表单状态
-  const [formData, setFormData] = useState({
-    language: '英文',
-    modelNumber: 'PLAF005',
-    deviceSN: '',
-    memberId: '',
-    startTime: '',
-    endTime: '',
-    petType: '猫',
-    problemType: '',
-    detailedDescription: '宠物进食行为识别不到',
-    environment: '室内光线较暗',
-    frequency: '经常发生',
-    customPetType: '', // 新增：用户自定义宠物类型
-    customModelNumber: '' // 新增：用户自定义设备型号
-  });
+     // 表单状态
+   const [formData, setFormData] = useState({
+     language: 'English',
+     modelNumber: 'PLAF005',
+     deviceSN: '',
+     memberId: '',
+     startTime: '',
+     endTime: '',
+     petType: '猫',
+     problemType: '',
+     detailedDescription: '',
+     environment: '室内光线较暗',
+     frequency: '经常发生',
+     customPetType: '', // 新增：用户自定义宠物类型
+     customModelNumber: '' // 新增：用户自定义设备型号
+   });
   
   // 分析结果状态
   const [analysisResult, setAnalysisResult] = useState(null);
@@ -57,11 +64,70 @@ function CustomerService() {
   // 宠物类型选项
   const petTypes = ['猫', '狗', '其它'];
   
-  // 语言选项
-  const languages = ['英文', '中文'];
+     // 语言选项
+   const languages = ['English', 'Chinese'];
   
-  // 设备型号选项
-  const modelNumbers = ['PLAF005', 'PLAF006', 'PLPC001', 'PLWF005', '其它'];
+     // 设备型号级联选择器选项
+   const deviceModelOptions = [
+     {
+       value: 'feeders',
+       label: 'Feeders',
+       children: [
+         { value: 'PLAF005', label: 'PLAF005' },
+         { value: 'PLAF006', label: 'PLAF006' },
+         { value: 'PLAF003', label: 'PLAF003' },
+         { value: 'PLAF004', label: 'PLAF004' },
+         { value: 'PLAF008', label: 'PLAF008' },
+         { value: 'PLAF103', label: 'PLAF103' },
+         { value: 'PLAF203', label: 'PLAF203' },
+         { value: 'PLAF301', label: 'PLAF301' },
+         { value: 'PLAF109', label: 'PLAF109' },
+         { value: 'PLAF108', label: 'PLAF108' },
+         { value: 'PLAF001', label: 'PLAF001' },
+         { value: 'PLAF002', label: 'PLAF002' },
+         { value: 'PLAF101', label: 'PLAF101' },
+         { value: 'PLAF102', label: 'PLAF102' },
+         { value: 'PLAF107', label: 'PLAF107' }
+       ]
+     },
+     {
+       value: 'camera',
+       label: 'Camera',
+       children: [
+         { value: 'PLPC001', label: 'PLPC001' }
+       ]
+     },
+     {
+       value: 'fountains',
+       label: 'Fountains',
+       children: [
+         { value: 'PLWF005', label: 'PLWF005' },
+         { value: 'PLWF003', label: 'PLWF003' },
+         { value: 'PLWF004', label: 'PLWF004' },
+         { value: 'PLWF006', label: 'PLWF006' },
+         { value: 'PLWF002', label: 'PLWF002' },
+         { value: 'PLWF001', label: 'PLWF001' },
+         { value: 'PLWF007', label: 'PLWF007' },
+         { value: 'PLWF115', label: 'PLWF115' },
+         { value: 'PLWF105', label: 'PLWF105' },
+         { value: 'PLWF008', label: 'PLWF008' },
+         { value: 'PLWF305', label: 'PLWF305' },
+         { value: 'PLWF116', label: 'PLWF116' },
+         { value: 'PLWF106', label: 'PLWF106' }
+       ]
+     },
+     {
+       value: 'other',
+       label: 'Other',
+       children: [
+         { value: 'PLIT001', label: 'PLIT001' },
+         { value: 'PLIT002', label: 'PLIT002' },
+         { value: 'PLCT003', label: 'PLCT003' },
+         { value: 'PLCT004', label: 'PLCT004' },
+         { value: 'PLCT005', label: 'PLCT005' }
+       ]
+     }
+   ];
   
   // 问题类型选项 - 改为用户自定义
   const problemTypes = [
@@ -110,50 +176,36 @@ function CustomerService() {
   const validateForm = () => {
     const errors = [];
     
-    // 检查语言
-    if (!formData.language) {
-      errors.push('请选择语言');
-    }
+         // 检查语言
+     if (!formData.language) {
+       errors.push('Please select language');
+     }
     
-    // 检查设备型号
-    if (!formData.modelNumber) {
-      errors.push('请选择设备型号');
-    }
+         // 检查设备型号
+     if (!formData.modelNumber) {
+       errors.push('Please select device model');
+     }
     
-    if (formData.modelNumber === '其它' && !formData.customModelNumber) {
-      errors.push('请输入自定义设备型号');
-    }
+         // 检查必填字段
+     // Pet type field is hidden, using default value
+     
+     if (!formData.problemType) {
+       errors.push('Please describe problem type');
+     }
+     
+     if (!formData.detailedDescription) {
+       errors.push('Please describe problem in detail');
+     }
     
-    // 检查必填字段
-    if (!formData.petType) {
-      errors.push('请选择宠物类型');
-    }
+         // 检查设备识别信息（至少填写一项）
+     if (!formData.deviceSN && !formData.memberId) {
+       errors.push('Please fill in at least one of Device SN or Member ID');
+     }
     
-    if (formData.petType === '其它' && !formData.customPetType) {
-      errors.push('请输入自定义宠物类型');
-    }
-    
-    if (!formData.problemType) {
-      errors.push('请描述问题类型');
-    }
-    
-    if (!formData.detailedDescription) {
-      errors.push('请详细描述问题');
-    }
-    
-    // 检查设备识别信息（至少填写一项）
-    if (!formData.deviceSN && !formData.memberId) {
-      errors.push('请至少填写设备SN或Member ID中的一项');
-    }
-    
-    // 检查时间范围（必填）
-    if (!formData.startTime) {
-      errors.push('请填写开始时间');
-    }
-    
-    if (!formData.endTime) {
-      errors.push('请填写结束时间');
-    }
+         // 检查时间范围（必填）
+     if (!formData.startTime || !formData.endTime) {
+       errors.push('Please select time range');
+     }
     
     return errors;
   };
@@ -165,12 +217,12 @@ function CustomerService() {
       return response;
     } catch (error) {
       console.error('接口调用失败:', error);
-      return {
-        error: '接口调用失败',
-        message: error.message || '网络连接错误',
-        timestamp: new Date().toLocaleString(),
-        note: '请检查网络连接和API密钥配置'
-      };
+             return {
+         error: 'API call failed',
+         message: error.message || 'Network connection error',
+         timestamp: new Date().toLocaleString(),
+         note: 'Please check network connection and API key configuration'
+       };
     }
   };
 
@@ -178,7 +230,7 @@ function CustomerService() {
     // 表单验证
     const errors = validateForm();
     if (errors.length > 0) {
-      alert('请完善以下信息：\n' + errors.join('\n'));
+             alert('Please complete the following information:\n' + errors.join('\n'));
       return;
     }
     
@@ -200,21 +252,51 @@ function CustomerService() {
       
     } catch (error) {
       console.error('分析过程出错:', error);
-      setAnalysisResult({ error: '接口调用失败', details: error.message });
+             setAnalysisResult({ error: 'API call failed', details: error.message });
     } finally {
       setIsAnalyzing(false);
     }
   };
 
   const handleLogout = () => {
-     localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('username');
     localStorage.removeItem('token');
-    navigate('/login');
+    navigate('/');
   };
 
   const handleGoToHome = () => {
     navigate('/home');
+  };
+
+  // 处理时间范围变化
+  const handleTimeRangeChange = (dates, dateStrings) => {
+    if (dates && dates.length === 2) {
+      setFormData(prev => ({
+        ...prev,
+        startTime: dateStrings[0],
+        endTime: dateStrings[1]
+      }));
+    }
+  };
+
+  // 处理设备型号级联选择器变化
+  const handleDeviceModelChange = (value, selectedOptions) => {
+    if (value && value.length === 2) {
+      // 获取选中的具体型号
+      const selectedModel = value[1];
+      setFormData(prev => ({
+        ...prev,
+        modelNumber: selectedModel
+      }));
+    }
+  };
+
+  // 级联选择器搜索过滤函数
+  const filterDeviceModel = (inputValue, path) => {
+    return path.some(option => 
+      option.label.toLowerCase().indexOf(inputValue.toLowerCase()) > -1
+    );
   };
 
   // 处理文本中的超链接，将其转换为可点击的链接
@@ -247,41 +329,42 @@ function CustomerService() {
     });
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50">
+     return (
+     <div className="min-h-screen bg-gray-50">
+
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleGoToHome}
-                className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                <span>返回首页</span>
-              </button>
+                <button
+                 onClick={handleGoToHome}
+                 className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+               >
+                 <ArrowLeft className="w-5 h-5" />
+                 <span>Back to Home</span>
+               </button>
               <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center">
                 <Bot className="w-6 h-6 text-white" />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">智能客服中心</h1>
-                <p className="text-sm text-gray-500">AI驱动的故障诊断与解决方案推荐系统</p>
-              </div>
+                             <div>
+                 <h1 className="text-2xl font-bold text-gray-900">Smart Customer Service Center</h1>
+                 <p className="text-sm text-gray-500">AI-powered troubleshooting and solution recommendation system</p>
+               </div>
             </div>
             
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-gray-700">
-                <User className="h-5 w-5" />
-                <span>欢迎，{username}</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>退出</span>
-              </button>
+                             <div className="flex items-center space-x-2 text-gray-700">
+                 <User className="h-5 w-5" />
+                 <span>Welcome, {username}</span>
+               </div>
+                             <button
+                 onClick={handleLogout}
+                 className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+               >
+                 <LogOut className="h-4 w-4" />
+                 <span>Logout</span>
+               </button>
             </div>
           </div>
         </div>
@@ -304,267 +387,197 @@ function CustomerService() {
               <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3">
                 <CheckCircle className="h-4 w-4 text-white" />
               </div>
-              <h2 className="text-xl font-semibold text-gray-900">问题反馈</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Problem Report</h2>
             </div>
 
-            <div className="space-y-6">
-              {/* 语言选择 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  语言 <span className="text-red-500">*</span>
-                </label>
-                <p className="text-xs text-gray-600 mb-3">分析结果呈现语言</p>
-                <div className="relative">
-                  <select
-                    value={formData.language}
-                    onChange={(e) => handleInputChange('language', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                  >
-                    {languages.map(lang => (
-                      <option key={lang} value={lang}>{lang}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-3 h-5 w-5 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
+                         <div className="space-y-8">
+               {/* 语言选择 */}
+               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-100 shadow-sm">
+                 <div className="flex items-center mb-4">
+                   <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center mr-3">
+                     <Globe className="w-5 h-5 text-white" />
+                   </div>
+                   <div>
+                     <label className="block text-lg font-semibold text-gray-800 mb-1">
+                       Language <span className="text-red-500">*</span>
+                     </label>
+                     <p className="text-sm text-blue-600">Analysis result display language</p>
+                   </div>
+                 </div>
+                 <div className="relative">
+                   <select
+                     value={formData.language}
+                     onChange={(e) => handleInputChange('language', e.target.value)}
+                     className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white text-base"
+                   >
+                     {languages.map(lang => (
+                       <option key={lang} value={lang}>{lang}</option>
+                     ))}
+                   </select>
+                   <ChevronDown className="absolute right-4 top-4 h-5 w-5 text-gray-400 pointer-events-none" />
+                 </div>
+               </div>
 
-              {/* 设备型号 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  设备型号 <span className="text-red-500">*</span>
-                </label>
-                <div className="space-y-3">
-                  <div className="relative">
-                    <select
-                      value={formData.modelNumber}
-                      onChange={(e) => handleInputChange('modelNumber', e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                    >
-                      {modelNumbers.map(model => (
-                        <option key={model} value={model}>{model}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-3 h-5 w-5 text-gray-400 pointer-events-none" />
+                {/* 设备型号 */}
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-xl border border-purple-100 shadow-sm">
+                  <div className="flex items-center mb-4">
+                    <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center mr-3">
+                      <Smartphone className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-lg font-semibold text-gray-800 mb-1">
+                        Device Model <span className="text-red-500">*</span>
+                      </label>
+                                             <p className="text-sm text-purple-600">Select model number</p>
+                    </div>
+                  </div>
+                  <Cascader
+                    options={deviceModelOptions}
+                    onChange={handleDeviceModelChange}
+                    placeholder="Please select device category and model"
+                    showSearch={{ filter: filterDeviceModel }}
+                    style={{ width: '100%', height: '48px' }}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* 设备识别信息 - 请至少填写一项 */}
+                <div className="bg-gradient-to-r from-cyan-50 to-blue-50 p-6 rounded-xl border border-cyan-100 shadow-sm">
+                  <div className="flex items-center mb-4">
+                    <div className="w-8 h-8 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center mr-3">
+                      <Settings className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                                             <h3 className="text-lg font-semibold text-gray-800 mb-1">Device Identification <span className="text-red-500">*</span></h3>
+                                               <p className="text-sm font-medium text-cyan-800 mb-4">⚠️ Please fill in at least one for device identification</p>
+                    </div>
                   </div>
                   
-                  {/* 自定义设备型号输入 */}
-                  {formData.modelNumber === '其它' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* 设备SN */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        请输入设备型号
+                        Device SN
                       </label>
                       <input
                         type="text"
-                        value={formData.customModelNumber}
-                        onChange={(e) => handleInputChange('customModelNumber', e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="请输入您的设备型号..."
+                        value={formData.deviceSN}
+                        onChange={(e) => handleInputChange('deviceSN', e.target.value)}
+                        className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                        placeholder="Please enter device SN"
+                        maxLength={30}
                       />
                     </div>
-                  )}
-                </div>
-              </div>
 
-              {/* 设备识别信息 - 请至少填写一项 */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="mb-3">
-                  <h3 className="text-sm font-medium text-blue-800 mb-1">设备识别信息 - 请至少填写一项</h3>
-                  <p className="text-xs text-blue-600">请填写以下任意一项用于设备识别</p>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 设备SN */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      设备SN
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.deviceSN}
-                      onChange={(e) => handleInputChange('deviceSN', e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="请输入设备SN"
-                      maxLength={30}
-                    />
-                  </div>
-
-                  {/* Member ID */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      用户ID
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.memberId}
-                      onChange={(e) => handleInputChange('memberId', e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="请输入用户ID"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 时间范围 - 必填 */}
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="mb-3">
-                  <h3 className="text-sm font-medium text-green-800 mb-1">问题发生时间范围</h3>
-                  <p className="text-xs text-green-600">必填，有助于更精确地定位问题</p>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 开始时间 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      开始时间 <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={formData.startTime}
-                      onChange={(e) => handleInputChange('startTime', e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-
-                  {/* 结束时间 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      结束时间 <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={formData.endTime}
-                      onChange={(e) => handleInputChange('endTime', e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 宠物类型 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  宠物类型 <span className="text-red-500">*</span>
-                </label>
-                <div className="space-y-3">
-                  <div className="relative">
-                    <select
-                      value={formData.petType}
-                      onChange={(e) => handleInputChange('petType', e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                    >
-                      {petTypes.map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-3 h-5 w-5 text-gray-400 pointer-events-none" />
-                  </div>
-                  
-                  {/* 自定义宠物类型输入 */}
-                  {formData.petType === '其它' && (
+                    {/* Member ID */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        请输入宠物类型
+                        User ID
                       </label>
                       <input
                         type="text"
-                        value={formData.customPetType}
-                        onChange={(e) => handleInputChange('customPetType', e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="请输入您的宠物类型..."
+                        value={formData.memberId}
+                        onChange={(e) => handleInputChange('memberId', e.target.value)}
+                        className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                        placeholder="Please enter user ID"
                       />
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
 
-              {/* 问题类型 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  问题类型 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.problemType}
-                  onChange={(e) => handleInputChange('problemType', e.target.value)}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="请描述您遇到的问题类型..."
-                />
-              </div>
+                {/* 时间范围 - 必填 */}
+                <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-6 rounded-xl border border-emerald-100 shadow-sm">
+                  <div className="flex items-center mb-4">
+                    <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-green-500 rounded-lg flex items-center justify-center mr-3">
+                      <Clock className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-800 mb-1">Problem Time Range <span className="text-red-500">*</span></h3>
+                      <p className="text-sm text-emerald-600">Required, helps to locate the problem more accurately</p>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                   
+                    </label>
+                    <DatePicker.RangePicker
+                      showTime
+                      format="YYYY-MM-DD HH:mm:ss"
+                      onChange={handleTimeRangeChange}
+                      className="w-full"
+                      placeholder={['Start Time', 'End Time']}
+                      style={{ width: '100%', height: '48px' }}
+                    />
+                  </div>
+                </div>
 
-              {/* 详细描述问题 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  详细描述问题 <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={formData.detailedDescription}
-                  onChange={(e) => handleInputChange('detailedDescription', e.target.value)}
-                  rows={3}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  placeholder="请详细描述您遇到的问题..."
-                />
-                <p className="text-xs text-gray-500 mt-1">建议详细描述问题的具体表现、发生时间、频率等信息</p>
-              </div>
+                {/* 问题类型 */}
+                <div className="bg-gradient-to-r from-orange-50 to-red-50 p-6 rounded-xl border border-orange-100 shadow-sm">
+                  <div className="flex items-center mb-4">
+                    <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-500 rounded-lg flex items-center justify-center mr-3">
+                      <AlertCircle className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-lg font-semibold text-gray-800 mb-1">
+                        Problem Type <span className="text-red-500">*</span>
+                      </label>
+                      <p className="text-sm text-orange-600">Describe the type of problem you encountered</p>
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={formData.problemType}
+                    onChange={(e) => handleInputChange('problemType', e.target.value)}
+                    className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                    placeholder="Please describe the type of problem you encountered..."
+                  />
+                </div>
 
-              {/* 使用环境 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  使用环境
-                </label>
-                <div className="relative">
-                  <select
-                    value={formData.environment}
-                    onChange={(e) => handleInputChange('environment', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                {/* 详细描述问题 */}
+                <div className="bg-gradient-to-r from-violet-50 to-purple-50 p-6 rounded-xl border border-violet-100 shadow-sm">
+                  <div className="flex items-center mb-4">
+                    <div className="w-8 h-8 bg-gradient-to-r from-violet-500 to-purple-500 rounded-lg flex items-center justify-center mr-3">
+                      <FileText className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-lg font-semibold text-gray-800 mb-1">
+                        Detailed Problem Description <span className="text-red-500">*</span>
+                      </label>
+                      <p className="text-sm text-violet-600">Describe your problem in detail for better analysis</p>
+                    </div>
+                  </div>
+                  <textarea
+                    value={formData.detailedDescription}
+                    onChange={(e) => handleInputChange('detailedDescription', e.target.value)}
+                    rows={4}
+                    className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-base"
+                    placeholder="Please describe your problem in detail..."
+                  />
+                  <p className="text-xs text-gray-500 mt-2">Please describe the specific symptoms, occurrence time, frequency, etc.</p>
+                </div>
+
+                {/* 智能分析按钮 */}
+                <div className="pt-4">
+                  <button
+                    onClick={handleAnalyze}
+                    disabled={isAnalyzing}
+                    className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white py-4 px-8 rounded-xl font-semibold hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 transition-all duration-300 flex items-center justify-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-1"
                   >
-                    {environments.map(env => (
-                      <option key={env} value={env}>{env}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-3 h-5 w-5 text-gray-400 pointer-events-none" />
+                    {isAnalyzing ? (
+                      <>
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                        <span className="text-lg">Analyzing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Search className="h-6 w-6" />
+                        <span className="text-lg">Smart Analysis</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-              </div>
-
-              {/* 问题频率 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  问题频率
-                </label>
-                <div className="relative">
-                  <select
-                    value={formData.frequency}
-                    onChange={(e) => handleInputChange('frequency', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                  >
-                    {frequencies.map(freq => (
-                      <option key={freq} value={freq}>{freq}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-3 h-5 w-5 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* 智能分析按钮 */}
-              <button
-                onClick={handleAnalyze}
-                disabled={isAnalyzing}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isAnalyzing ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    <span>分析中...</span>
-                  </>
-                ) : (
-                  <>
-                    <Search className="h-5 w-5" />
-                    <span>智能分析问题</span>
-                  </>
-                )}
-              </button>
-            </div>
+             </div>
 
             {/* 快捷问题类型 */}
             {/* <div className="mt-8 grid grid-cols-2 gap-4">
@@ -593,25 +606,25 @@ function CustomerService() {
             transition={{ duration: 0.6 }}
             className="bg-white rounded-lg shadow-lg p-6"
           >
-            <div className="flex items-center mb-6">
-              <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3">
-                <Bot className="h-4 w-4 text-white" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">AI分析结果</h2>
-              {analysisResult && !analysisResult.error && (
-                <div className="ml-auto">
-                  <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-                    接口响应成功
-                  </span>
-                </div>
-              )}
-            </div>
+                         <div className="flex items-center mb-6">
+               <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3">
+                 <Bot className="h-4 w-4 text-white" />
+               </div>
+               <h2 className="text-xl font-semibold text-gray-900">AI Analysis Results</h2>
+               {analysisResult && !analysisResult.error && (
+                 <div className="ml-auto">
+                   <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                     API Response Success
+                   </span>
+                 </div>
+               )}
+             </div>
 
-            {isAnalyzing ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-500">分析中...</p>
-              </div>
+                         {isAnalyzing ? (
+               <div className="text-center py-12">
+                 <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                 <p className="text-gray-500">Analyzing...</p>
+               </div>
             ) : analysisResult ? (
                <div className="space-y-6">
                  {/* 错误处理 */}
@@ -619,7 +632,7 @@ function CustomerService() {
                    <div className="bg-red-50 p-4 rounded-lg">
                      <div className="flex items-center mb-3">
                        <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
-                       <h3 className="font-semibold text-red-800">分析失败</h3>
+                                                <h3 className="font-semibold text-red-800">Analysis Failed</h3>
                      </div>
                      <div className="bg-white p-4 rounded border">
                        <p className="text-red-700">{analysisResult.message || analysisResult.error}</p>
@@ -639,25 +652,25 @@ function CustomerService() {
                                <TrendingUp className="h-5 w-5 text-white" />
                              </div>
                              <div>
-                               <h3 className="font-bold text-green-800 text-lg">AI分析置信度</h3>
-                               <p className="text-green-600 text-sm">基于问题描述的准确度评估</p>
+                               <h3 className="font-bold text-green-800 text-lg">AI Analysis Confidence</h3>
+                               <p className="text-green-600 text-sm">Accuracy assessment based on problem description</p>
                              </div>
                            </div>
                            <div className="text-right">
                              <div className="text-2xl font-bold text-green-700">
                                {(analysisResult.confidenceScore * 100).toFixed(1)}%
                              </div>
-                             <div className="text-xs text-green-600">置信度</div>
+                                                            <div className="text-xs text-green-600">Confidence</div>
                            </div>
                          </div>
                          
                          <div className="bg-white p-4 rounded-lg border border-green-200">
                            <div className="flex items-center justify-between mb-2">
-                             <span className="text-sm font-medium text-gray-700">准确度评分</span>
+                             <span className="text-sm font-medium text-gray-700">Accuracy Score</span>
                              <span className="text-sm font-bold text-green-700">
-                               {analysisResult.confidenceScore >= 0.8 ? '优秀' : 
-                                analysisResult.confidenceScore >= 0.6 ? '良好' : 
-                                analysisResult.confidenceScore >= 0.4 ? '一般' : '需要更多信息'}
+                                                                {analysisResult.confidenceScore >= 0.8 ? 'Excellent' : 
+                                  analysisResult.confidenceScore >= 0.6 ? 'Good' : 
+                                  analysisResult.confidenceScore >= 0.4 ? 'Fair' : 'Need More Info'}
                              </span>
                            </div>
                            <div className="w-full bg-gray-200 rounded-full h-3">
@@ -685,7 +698,7 @@ function CustomerService() {
                        <div className="bg-blue-50 p-4 rounded-lg">
                          <div className="flex items-center mb-3">
                            <Lightbulb className="h-5 w-5 text-blue-600 mr-2" />
-                           <h3 className="font-semibold text-blue-800">根因分析</h3>
+                           <h3 className="font-semibold text-blue-800">Root Cause Analysis</h3>
                          </div>
                          <div className="bg-white p-4 rounded border">
                            <div className="text-gray-700 whitespace-pre-wrap">
@@ -700,7 +713,7 @@ function CustomerService() {
                        <div className="bg-purple-50 p-4 rounded-lg">
                          <div className="flex items-center mb-3">
                            <CheckCircle className="h-5 w-5 text-purple-600 mr-2" />
-                           <h3 className="font-semibold text-purple-800">推荐解决方案</h3>
+                           <h3 className="font-semibold text-purple-800">Recommended Solutions</h3>
                          </div>
                          <div className="bg-white p-4 rounded border">
                            <ul className="space-y-2">
@@ -722,7 +735,7 @@ function CustomerService() {
                        <div className="bg-blue-50 p-4 rounded-lg">
                          <div className="flex items-center mb-3">
                            <Bot className="h-5 w-5 text-blue-600 mr-2" />
-                           <h3 className="font-semibold text-blue-800">推荐回复</h3>
+                           <h3 className="font-semibold text-blue-800">Recommended Response</h3>
                          </div>
                          <div className="bg-white p-4 rounded border">
                            <div className="text-gray-700 whitespace-pre-wrap">
@@ -801,7 +814,7 @@ function CustomerService() {
                        <div className="bg-indigo-50 p-4 rounded-lg">
                          <div className="flex items-center mb-3">
                            <Lightbulb className="h-5 w-5 text-indigo-600 mr-2" />
-                           <h3 className="font-semibold text-indigo-800">知识库参考文档</h3>
+                           <h3 className="font-semibold text-indigo-800">Knowledge Base References</h3>
                          </div>
                          <div className="bg-white p-4 rounded border">
                            <div className="flex flex-wrap gap-2 mb-4">
@@ -830,17 +843,17 @@ function CustomerService() {
                                  <h4 className="font-semibold text-gray-800 text-sm">
                                    {analysisResult.knowledgeBaseResults.sources[selectedDocumentIndex].filename}
                                  </h4>
-                                 <button
-                                   onClick={() => setSelectedDocumentIndex(null)}
-                                   className="text-gray-500 hover:text-gray-700 text-sm"
-                                 >
-                                   关闭
-                                 </button>
+                                                                    <button
+                                     onClick={() => setSelectedDocumentIndex(null)}
+                                     className="text-gray-500 hover:text-gray-700 text-sm"
+                                   >
+                                     Close
+                                   </button>
                                </div>
                                <div className="bg-white p-3 rounded border text-sm text-gray-700 max-h-60 overflow-y-auto whitespace-pre-wrap">
                                  {(analysisResult.knowledgeBaseResults.sources[selectedDocumentIndex].content || 
                                   analysisResult.knowledgeBaseResults.sources[selectedDocumentIndex].text || 
-                                  '暂无内容').replace(/column_\d+:/g, '')}
+                                   'No content').replace(/column_\d+:/g, '')}
                                </div>
                              </div>
                            )}
@@ -850,12 +863,12 @@ function CustomerService() {
                    </>
                  )}
                </div>
-            ) : (
-              <div className="text-center py-12">
-                <Bot className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">请填写左侧表单并点击分析按钮查看结果</p>
-              </div>
-            )}
+                         ) : (
+               <div className="text-center py-12">
+                 <Bot className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                 <p className="text-gray-500">Please fill in the form on the left and click analyze to view results</p>
+               </div>
+             )}
           </motion.div>
         </div>
       </main>

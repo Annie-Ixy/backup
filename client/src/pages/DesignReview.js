@@ -14,10 +14,14 @@ import {
   ChevronRight,
   ArrowLeft,
   LogOut,
-  User
+  User,
+  Globe
 } from 'lucide-react';
 import DesignFileUpload from '../components/DesignFileUpload';
 import { designReviewApiService } from '../services/designReviewApi';
+import downloadFile from '../components/downloadFile.ts';
+import { Button } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 // import { isLogin } from '../utils/index.ts';
 
 function DesignReview() {
@@ -235,8 +239,8 @@ function DesignReview() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               <button
                 onClick={handleBackToHome}
@@ -270,6 +274,82 @@ function DesignReview() {
         </div>
       </header>
 
+      {/* Page Header */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <motion.div
+          className="text-center p-8 border-b border-gray-200 bg-white shadow-sm rounded-lg"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="mb-1">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl mb-4">
+              <FileText className="w-8 h-8 text-white" />
+            </div>
+          </div>
+
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            设计稿审核AI系统
+          </h2>
+          <p className="text-l text-gray-600 mb-8 max-w-2xl mx-auto">
+            上传设计稿文件，使用AI技术进行智能审核，包括文本检查、格式验证、一致性分析和质量评估，支持多语言和多维度审核
+          </p>
+
+          {/* Features */}
+          <div className="grid md:grid-cols-3 gap-6 mb-8">
+            <motion.div
+              className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+            >
+              <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-lg mb-4 mx-auto">
+                <Search className="w-6 h-6 text-purple-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                智能审核
+              </h3>
+              <p className="text-gray-600 text-sm">
+                使用先进的AI技术自动检测设计稿中的文本错误、格式问题和一致性问题
+              </p>
+            </motion.div>
+
+            <motion.div
+              className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-lg mb-4 mx-auto">
+                <Globe className="w-6 h-6 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                多语言支持
+              </h3>
+              <p className="text-gray-600 text-sm">
+                支持中文、英文等多种语言的审核，确保不同语言版本的质量一致性
+              </p>
+            </motion.div>
+
+            <motion.div
+              className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+            >
+              <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg mb-4 mx-auto">
+                <Download className="w-6 h-6 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                详细报告
+              </h3>
+              <p className="text-gray-600 text-sm">
+                生成Excel和HTML格式的详细审核报告，包含问题定位、建议修复和统计信息
+              </p>
+            </motion.div>
+          </div>
+        </motion.div>
+      </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
@@ -391,7 +471,25 @@ function DesignReview() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                     >
-                      <h2 className="text-xl font-semibold mb-4">上传需要检查的文件</h2>
+                      {/* 示例文件下载 */}
+                      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium text-blue-900 mb-1">参考文件下载</h3>
+                            <p className="text-sm text-blue-700">当前下载文件：图片格式</p>
+                          </div>
+                          <Button 
+                            type="primary" 
+                            onClick={() => downloadFile('设计稿示例.jpeg')} 
+                            shape="round" 
+                            icon={<DownloadOutlined />} 
+                            size="middle"
+                            className="bg-blue-600 hover:bg-blue-700 border-blue-600"
+                          >
+                            示例文件
+                          </Button>
+                        </div>
+                      </div>
                       
                       {error && (
                         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">

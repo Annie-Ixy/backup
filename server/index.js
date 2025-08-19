@@ -15,12 +15,16 @@ const resumeRoutes = require('./resume/resumeRoutes');
 const designReviewRoutes = require('./designreview/designReviewRoutes');
 // const questionnaireRoutes = require('./questionnaire/questionnaireRoutes');
 const authRoutes = require('./routes/authRoutes');
+const voiceCloningRoutes = require('./voiceCloing');
+const sampleFileRoutes = require('./sampleFile');
 
 app.use('/', resumeRoutes);
 app.use('/', designReviewRoutes);
 // app.use('/', questionnaireRoutes);
 app.use('/udap/admin', authRoutes);  // 登录路由
 app.use('/udap/product_af109', authRoutes);  // 用户信息路由
+app.use('/voice-cloning', voiceCloningRoutes);  // 语音克隆路由
+app.use('/', sampleFileRoutes);  // 示例文件下载路由
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

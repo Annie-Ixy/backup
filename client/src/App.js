@@ -7,6 +7,9 @@ import DesignReview from './pages/DesignReview';
 import QuestionnaireAnalysis from './pages/QuestionnaireAnalysis';
 import CustomerService from './pages/CustomerService';
 import ProtectedRoute from './components/ProtectedRoute';
+import SocialMedia from './pages/Socialmedia.js';
+import VoiceCloning from './pages/VoiceCloning';
+import ScrollToTop from './components/ScrollToTop';
 import { isLogin } from './utils/index.ts';
 
 // 路由拦截组件
@@ -44,6 +47,7 @@ function RouteInterceptor() {
 function App() {
   return (
     <Router>
+      <ScrollToTop />
       <Routes>
         {/* 默认路由 - 路由拦截判断 */}
         <Route path="/" element={<RouteInterceptor />} />
@@ -96,6 +100,24 @@ function App() {
               </ProtectedRoute>
             } 
           />
+
+        <Route 
+          path="/social-media" 
+          element={
+            <ProtectedRoute>
+              <SocialMedia />
+            </ProtectedRoute>
+          } 
+        />
+
+        <Route 
+          path="/voice-cloning" 
+          element={
+            <ProtectedRoute>
+              <VoiceCloning />
+            </ProtectedRoute>
+          } 
+        />
         
         {/* 404页面 - 使用路由拦截逻辑 */}
         <Route path="*" element={<RouteInterceptor />} />
