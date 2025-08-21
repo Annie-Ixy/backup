@@ -30,13 +30,15 @@ function DesignReview() {
   
   const [activeTab, setActiveTab] = useState('upload');
   const [config, setConfig] = useState(null);
-  const [selectedLanguage, setSelectedLanguage] = useState('zh-CN');
+  const [selectedLanguages, setSelectedLanguages] = useState(['en']); // 默认选择英语
   const [selectedCategories, setSelectedCategories] = useState(['basic', 'advanced']);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [processResults, setProcessResults] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [currentProcessingFile, setCurrentProcessingFile] = useState('');
+  const [processingStage, setProcessingStage] = useState('');
+  const [processingMessage, setProcessingMessage] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState(null);
   let isLoginIndex = 0;
@@ -84,44 +86,71 @@ function DesignReview() {
     setIsProcessing(true);
     setProcessingProgress(0);
     setCurrentProcessingFile('');
+    setProcessingStage('');
+    setProcessingMessage('');
     setError(null);
 
     try {
-      const newResults = [];
+      // 使用实时进度更新的API
+      const fileIds = unprocessedFiles.map(file => file.id);
       
-      for (let i = 0; i < unprocessedFiles.length; i++) {
-        const file = unprocessedFiles[i];
-        setCurrentProcessingFile(file.originalName);
-        setProcessingProgress(Math.round((i / unprocessedFiles.length) * 100));
-
-        try {
-          // 处理单个文件
-          const results = await designReviewApiService.processFiles([file.id], selectedLanguage, selectedCategories);
-          newResults.push(...results);
-        } catch (fileError) {
-          console.error(`Error processing file ${file.originalName}:`, fileError);
-          // 添加失败结果
-          newResults.push({
-            fileId: file.id,
-            success: false,
-            error: fileError.message || 'Processing failed'
-          });
+      const results = await designReviewApiService.processFilesWithProgress(
+        fileIds, 
+        selectedLanguages, 
+        selectedCategories,
+        (progressData) => {
+          // 处理实时进度更新
+          console.log('Progress update:', progressData);
+          
+          // 更新总体进度
+          if (progressData.overallProgress !== undefined) {
+            setProcessingProgress(progressData.overallProgress);
+          } else if (progressData.progress !== undefined) {
+            // 如果是单个文件的进度，计算总体进度
+            const fileIndex = progressData.fileIndex || 0;
+            const totalFiles = progressData.totalFiles || fileIds.length;
+            const fileProgress = progressData.progress || 0;
+            const overallProgress = Math.round(((fileIndex / totalFiles) * 100) + (fileProgress / totalFiles));
+            setProcessingProgress(Math.min(overallProgress, 100));
+          }
+          
+          // 更新当前处理文件信息
+          if (progressData.currentFile) {
+            const currentFile = unprocessedFiles.find(f => f.id === progressData.currentFile);
+            if (currentFile) {
+              setCurrentProcessingFile(currentFile.originalName);
+            }
+          }
+          
+          // 更新处理阶段信息
+          if (progressData.stage) {
+            setProcessingStage(progressData.stage);
+          }
+          if (progressData.message) {
+            setProcessingMessage(progressData.message);
+            console.log('Processing stage:', progressData.stage, progressData.message);
+          }
         }
-      }
-
+      );
+      
       // 完成处理
       setProcessingProgress(100);
       setCurrentProcessingFile('');
+      setProcessingStage('completed');
+      setProcessingMessage('所有文件处理完成！');
       
       // 将新结果添加到现有结果中
-      setProcessResults(prevResults => [...prevResults, ...newResults]);
+      setProcessResults(prevResults => [...prevResults, ...results]);
       setActiveTab('review');
     } catch (err) {
+      console.error('Processing error:', err);
       setError(err instanceof Error ? err.message : 'Processing failed');
     } finally {
       setIsProcessing(false);
       setProcessingProgress(0);
       setCurrentProcessingFile('');
+      setProcessingStage('');
+      setProcessingMessage('');
     }
   };
 
@@ -132,6 +161,29 @@ function DesignReview() {
       case 'low': return 'text-blue-600 bg-blue-50';
       default: return 'text-gray-600 bg-gray-50';
     }
+  };
+
+  const getStageDisplayName = (stage) => {
+    const stageNames = {
+      'starting': '初始化',
+      'extracting': '提取内容',
+      'analyzing': '分析中',
+      'ai_analysis': 'AI分析',
+      'parsing': '解析结果',
+      'validating': '验证结果',
+      'completing': '完成处理',
+      'file_processing': '文件处理',
+      'pdf_processing': 'PDF处理',
+      'batch_processing': '批量处理',
+      'single_batch': '单批处理',
+      'image_analysis': '图像分析',
+      'text_extraction': '文本提取',
+      'fallback_extraction': '备用提取',
+      'content_review': '内容审查',
+      'completed': '已完成',
+      'error': '错误'
+    };
+    return stageNames[stage] || stage;
   };
 
   // 检查是否有未处理的文件
@@ -154,6 +206,8 @@ function DesignReview() {
     setError(null);
     setProcessingProgress(0);
     setCurrentProcessingFile('');
+    setProcessingStage('');
+    setProcessingMessage('');
     setUploadComponentKey(prev => prev + 1); // 强制重新渲染上传组件
   };
 
@@ -327,7 +381,7 @@ function DesignReview() {
                 多语言支持
               </h3>
               <p className="text-gray-600 text-sm">
-                支持中文、英文等多种语言的审核，确保不同语言版本的质量一致性
+                支持九种主要语言的审核：英语、德语、法语、西班牙语、意大利语、荷兰语、波兰语、瑞典语、日语，确保多语言内容的质量一致性
               </p>
             </motion.div>
 
@@ -360,20 +414,122 @@ function DesignReview() {
                 设置
               </h2>
 
-              {/* Language Selection */}
+              {/* Multi-Language Selection */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  语言选择
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-blue-600" />
+                  多语言内容选择
                 </label>
-                <select
-                  value={selectedLanguage}
-                  onChange={(e) => setSelectedLanguage(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  {config && Object.entries(config.supportedLanguages).map(([code, name]) => (
-                    <option key={code} value={code}>{name}</option>
-                  ))}
-                </select>
+                <p className="text-xs text-gray-500 mb-3">
+                  选择设计稿中包含的所有语言，AI将对每种语言进行相应的拼写、语法和术语审核
+                </p>
+                
+                {/* 快速选择按钮 */}
+                <div className="mb-3 flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLanguages(['en', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'sv', 'ja'])}
+                    className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors"
+                  >
+                    全选九国语言
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLanguages(['en'])}
+                    className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                  >
+                    仅英语
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLanguages(['en', 'zh-CN'])}
+                    className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors"
+                  >
+                    中英双语
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLanguages([])}
+                    className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors"
+                  >
+                    清空选择
+                  </button>
+                </div>
+
+                {/* 语言选择网格 */}
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3 bg-white">
+                  {config && Object.entries(config.supportedLanguages).map(([code, name]) => {
+                    const isSelected = selectedLanguages.includes(code);
+                    return (
+                      <label 
+                        key={code} 
+                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                          isSelected 
+                            ? 'bg-purple-50 border border-purple-200 text-purple-700' 
+                            : 'hover:bg-gray-50 border border-transparent'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedLanguages([...selectedLanguages, code]);
+                            } else {
+                              setSelectedLanguages(selectedLanguages.filter(lang => lang !== code));
+                            }
+                          }}
+                          className="rounded text-purple-600 focus:ring-purple-500 focus:ring-2"
+                        />
+                        <span className={`text-sm font-medium ${isSelected ? 'text-purple-700' : 'text-gray-700'}`}>
+                          {name}
+                        </span>
+                        {isSelected && (
+                          <div className="ml-auto w-2 h-2 bg-purple-500 rounded-full"></div>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+                
+                {/* 选择状态显示 */}
+                <div className="mt-3 p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">
+                      💡 已选择 <span className="font-semibold text-purple-600">{selectedLanguages.length}</span> 种语言
+                    </span>
+                  </div>
+                  
+                  {/* 显示已选择的语言 */}
+                  {selectedLanguages.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {selectedLanguages.map(code => (
+                        <span 
+                          key={code}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full"
+                        >
+                          {config?.supportedLanguages[code]?.split(' ')[0] || code}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLanguages(selectedLanguages.filter(lang => lang !== code))}
+                            className="ml-1 hover:bg-purple-200 rounded-full w-3 h-3 flex items-center justify-center"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {selectedLanguages.length === 0 && (
+                  <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-xs text-red-600">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>⚠️ 请至少选择一种语言进行审核</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Review Categories */}
@@ -573,11 +729,26 @@ function DesignReview() {
                                     <span>正在处理: {currentProcessingFile}</span>
                                   </div>
                                 )}
+                                {processingMessage && (
+                                  <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
+                                    {processingMessage}
+                                  </div>
+                                )}
+                                {processingStage && (
+                                  <div className="text-xs text-gray-500">
+                                    当前阶段: {getStageDisplayName(processingStage)}
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <button
                                 onClick={handleProcess}
-                                className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                                disabled={selectedLanguages.length === 0}
+                                className={`w-full py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                                  selectedLanguages.length === 0 
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                                }`}
                               >
                                 开始处理
                                 <ChevronRight className="w-5 h-5" />
@@ -633,41 +804,90 @@ function DesignReview() {
                                   <div className="grid grid-cols-4 gap-4 mb-6">
                                     <div className="text-center p-4 bg-gray-50 rounded-lg">
                                       <div className="text-2xl font-bold text-gray-900">
-                                        {result.reviewResult.review_summary.total_issues}
+                                        {result.reviewResult.review_summary?.total_issues || 0}
                                       </div>
                                       <div className="text-sm text-gray-500">总问题数</div>
                                     </div>
                                     <div className="text-center p-4 bg-red-50 rounded-lg">
                                       <div className="text-2xl font-bold text-red-600">
-                                        {result.reviewResult.review_summary.high_severity}
+                                        {result.reviewResult.review_summary?.high_severity || 0}
                                       </div>
                                       <div className="text-sm text-gray-500">高严重性</div>
                                     </div>
                                     <div className="text-center p-4 bg-yellow-50 rounded-lg">
                                       <div className="text-2xl font-bold text-yellow-600">
-                                        {result.reviewResult.review_summary.medium_severity}
+                                        {result.reviewResult.review_summary?.medium_severity || 0}
                                       </div>
                                       <div className="text-sm text-gray-500">中严重性</div>
                                     </div>
                                     <div className="text-center p-4 bg-green-50 rounded-lg">
                                       <div className="text-2xl font-bold text-green-600">
-                                        {result.reviewResult.review_summary.low_severity}
+                                        {result.reviewResult.review_summary?.low_severity || 0}
                                       </div>
                                       <div className="text-sm text-gray-500">低严重性</div>
                                     </div>
                                   </div>
 
+                                  {/* Language Analysis */}
+                                  {result.reviewResult.language_analysis && (
+                                    <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                      <h4 className="font-medium mb-3 flex items-center gap-2">
+                                        <Globe className="w-4 h-4 text-blue-600" />
+                                        语言分析结果
+                                      </h4>
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                        <div>
+                                          <span className="font-medium text-gray-700">检测到的语言:</span>
+                                          <div className="mt-1 flex flex-wrap gap-1">
+                                            {result.reviewResult.language_analysis.detected_languages?.map(lang => (
+                                              <span key={lang} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+                                                {config?.supportedLanguages[lang]?.split(' ')[0] || lang}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <span className="font-medium text-gray-700">主要语言:</span>
+                                          <div className="mt-1">
+                                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                                              {config?.supportedLanguages[result.reviewResult.language_analysis.primary_language]?.split(' ')[0] || result.reviewResult.language_analysis.primary_language}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <span className="font-medium text-gray-700">多语言内容:</span>
+                                          <div className="mt-1">
+                                            <span className={`px-2 py-1 rounded text-xs ${
+                                              result.reviewResult.language_analysis.mixed_language_content 
+                                                ? 'bg-orange-100 text-orange-700' 
+                                                : 'bg-gray-100 text-gray-700'
+                                            }`}>
+                                              {result.reviewResult.language_analysis.mixed_language_content ? '是' : '否'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
                                   {/* Issues */}
-                                  {result.reviewResult.issues.length > 0 && (
+                                  {result.reviewResult.issues && result.reviewResult.issues.length > 0 && (
                                     <div>
                                       <h4 className="font-medium mb-3">问题详情</h4>
                                       <div className="space-y-3">
                                         {result.reviewResult.issues.map((issue, idx) => (
                                           <div key={idx} className="border rounded-lg p-4">
                                             <div className="flex items-center justify-between mb-2">
-                                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSeverityColor(issue.severity)}`}>
-                                                {issue.severity.toUpperCase()}
-                                              </span>
+                                              <div className="flex items-center gap-2">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSeverityColor(issue.severity)}`}>
+                                                  {issue.severity.toUpperCase()}
+                                                </span>
+                                                {issue.language && (
+                                                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                                                    {config?.supportedLanguages[issue.language]?.split(' ')[0] || issue.language}
+                                                  </span>
+                                                )}
+                                              </div>
                                               <span className="text-sm text-gray-500">{issue.type}</span>
                                             </div>
                                             <p className="text-sm text-gray-700 mb-1">

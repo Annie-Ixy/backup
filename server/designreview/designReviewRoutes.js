@@ -96,18 +96,102 @@ router.post('/api/design-review/upload', designReviewUpload.array('files', 10), 
   }
 });
 
+// Store active SSE connections
+const activeConnections = new Map();
+
+// SSE endpoint for real-time progress updates
+router.get('/api/design-review/progress/:sessionId', (req, res) => {
+  const sessionId = req.params.sessionId;
+  
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control'
+  });
+
+  // Store connection
+  activeConnections.set(sessionId, res);
+  
+  // Send initial connection confirmation
+  res.write(`data: ${JSON.stringify({ type: 'connected', sessionId })}\n\n`);
+  
+  // Handle client disconnect
+  req.on('close', () => {
+    console.log(`SSE connection closed for session: ${sessionId}`);
+    activeConnections.delete(sessionId);
+  });
+  
+  req.on('error', (err) => {
+    console.error(`SSE connection error for session ${sessionId}:`, err);
+    activeConnections.delete(sessionId);
+  });
+});
+
+// Helper function to send progress updates
+function sendProgressUpdate(sessionId, progressData) {
+  const connection = activeConnections.get(sessionId);
+  if (connection) {
+    try {
+      connection.write(`data: ${JSON.stringify({ type: 'progress', ...progressData })}\n\n`);
+    } catch (error) {
+      console.error(`Error sending progress update to session ${sessionId}:`, error);
+      activeConnections.delete(sessionId);
+    }
+  }
+}
+
 router.post('/api/design-review/process', async (req, res) => {
   try {
-    const { fileIds, language, reviewCategories } = req.body;
+    const { fileIds, language, reviewCategories, sessionId } = req.body;
+    // Support both single language (string) and multiple languages (array)
+    const targetLanguages = Array.isArray(language) ? language : [language || 'en'];
+    
+    // 验证语言选择
+    if (!targetLanguages || targetLanguages.length === 0) {
+      return res.status(400).json({ error: 'At least one language must be selected' });
+    }
+    
+    // 验证语言代码是否支持
+    const supportedLanguageCodes = Object.keys(designReviewConfig.SUPPORTED_LANGUAGES);
+    const invalidLanguages = targetLanguages.filter(lang => !supportedLanguageCodes.includes(lang));
+    if (invalidLanguages.length > 0) {
+      return res.status(400).json({ 
+        error: `Unsupported languages: ${invalidLanguages.join(', ')}. Supported languages: ${supportedLanguageCodes.join(', ')}` 
+      });
+    }
+    
     if (!fileIds || fileIds.length === 0) {
       return res.status(400).json({ error: 'No files specified' });
     }
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({ error: 'OpenAI API key not configured' });
     }
+    
+    console.log(`Processing files with languages: ${targetLanguages.join(', ')}`);
+    console.log(`Review categories: ${reviewCategories?.join(', ') || 'default'}`);
+    console.log(`Session ID: ${sessionId}`);
+    
     const results = [];
-    for (const fileId of fileIds) {
+    const totalFiles = fileIds.length;
+    
+    for (let fileIndex = 0; fileIndex < fileIds.length; fileIndex++) {
+      const fileId = fileIds[fileIndex];
       const filePath = path.join(designReviewConfig.UPLOAD_DIR, fileId);
+      
+      // Send file-level progress
+      if (sessionId) {
+        sendProgressUpdate(sessionId, {
+          fileIndex,
+          totalFiles,
+          currentFile: fileId,
+          overallProgress: Math.round((fileIndex / totalFiles) * 100),
+          message: `开始处理文件 ${fileIndex + 1}/${totalFiles}: ${fileId}`
+        });
+      }
+      
       try {
         // 检查文件是否存在
         const fileExists = await fs.pathExists(filePath);
@@ -133,19 +217,68 @@ router.post('/api/design-review/process', async (req, res) => {
           continue;
         }
 
+        console.log(`开始处理文件: ${fileId}`);
+        console.log(`文件路径: ${filePath}`);
+        
+        // Send file processing progress
+        if (sessionId) {
+          sendProgressUpdate(sessionId, {
+            fileIndex,
+            totalFiles,
+            currentFile: fileId,
+            stage: 'file_processing',
+            message: `正在处理文件: ${fileId}`
+          });
+        }
+        
         const processedData = await fileProcessor.processFile(filePath);
+        console.log(`文件处理完成，类型: ${processedData.type}`);
+        
+        if (processedData.type === 'image') {
+          console.log(`图像文件检测到，使用AI视觉分析模式`);
+          console.log(`图像信息: ${processedData.metadata?.dimensions?.width}x${processedData.metadata?.dimensions?.height}`);
+        }
+        
+        // Create progress callback for this file
+        const progressCallback = sessionId ? (progressData) => {
+          sendProgressUpdate(sessionId, {
+            fileIndex,
+            totalFiles,
+            currentFile: fileId,
+            ...progressData
+          });
+        } : null;
+        
         const reviewResult = await aiReviewer.reviewContent(
           processedData,
-          language || 'zh-CN',
-          reviewCategories || ['basic', 'advanced']
+          targetLanguages,
+          reviewCategories || ['basic', 'advanced'],
+          progressCallback
         );
+        
+        console.log(`AI审查完成，发现问题数: ${reviewResult.issues?.length || 0}`);
+        console.log(`分析类型: ${reviewResult.metadata?.analysisType}`);
+        
         results.push({
           fileId,
           success: true,
           processedData,
           reviewResult
         });
-        console.log('results success', results);
+        console.log('文件处理成功完成');
+        
+        // Send file completion progress
+        if (sessionId) {
+          sendProgressUpdate(sessionId, {
+            fileIndex,
+            totalFiles,
+            currentFile: fileId,
+            stage: 'completed',
+            progress: 100,
+            message: `文件 ${fileId} 处理完成`
+          });
+        }
+        
       } catch (error) {
         console.error(`Error processing design review file ${fileId}:`, error);
         results.push({
@@ -153,14 +286,57 @@ router.post('/api/design-review/process', async (req, res) => {
           success: false,
           error: error.message
         });
+        
+        // Send error progress
+        if (sessionId) {
+          sendProgressUpdate(sessionId, {
+            fileIndex,
+            totalFiles,
+            currentFile: fileId,
+            stage: 'error',
+            message: `文件 ${fileId} 处理失败: ${error.message}`
+          });
+        }
       }
     }
+    
+    // Send final completion
+    if (sessionId) {
+      sendProgressUpdate(sessionId, {
+        stage: 'all_completed',
+        progress: 100,
+        message: '所有文件处理完成',
+        totalFiles,
+        successCount: results.filter(r => r.success).length,
+        errorCount: results.filter(r => !r.success).length
+      });
+      
+      // Close SSE connection after a short delay
+      setTimeout(() => {
+        const connection = activeConnections.get(sessionId);
+        if (connection) {
+          connection.write(`data: ${JSON.stringify({ type: 'close' })}\n\n`);
+          connection.end();
+          activeConnections.delete(sessionId);
+        }
+      }, 1000);
+    }
+    
     res.json({
       success: true,
       results
     });
   } catch (error) {
     console.error('Design review processing error:', error);
+    
+    // Send error to SSE if available
+    if (req.body.sessionId) {
+      sendProgressUpdate(req.body.sessionId, {
+        stage: 'error',
+        message: `处理错误: ${error.message}`
+      });
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });

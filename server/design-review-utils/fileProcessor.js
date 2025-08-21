@@ -132,9 +132,17 @@ class FileProcessor {
         }
         console.log('=== End PDF Debug ===\n');
         
-        // If no text extracted, convert to images for vision analysis
-        if (content.trim().length === 0) {
-          console.log('No text extracted. Converting PDF pages to images for GPT-4o vision analysis...');
+        // If no meaningful text extracted, convert to images for vision analysis
+        const finalTrimmedContent = content.trim();
+        const isMeaninglessContent = this.isMeaninglessContent(finalTrimmedContent);
+        
+        if (finalTrimmedContent.length === 0 || isMeaninglessContent) {
+          if (finalTrimmedContent.length === 0) {
+            console.log('No text extracted. Converting PDF pages to images for GPT-4o vision analysis...');
+          } else {
+            console.log(`Detected meaningless content (${finalTrimmedContent.length} chars). Converting PDF pages to images for GPT-4o vision analysis...`);
+            console.log('Content preview:', finalTrimmedContent.substring(0, 100));
+          }
           
           try {
             const outputDir = path.join(path.dirname(filePath), 'pdf_images_' + Date.now());
@@ -356,6 +364,66 @@ class FileProcessor {
     // This is a simplified version - in production, you'd use a library like pdf-lib or pdf-image
     // For now, we'll return an empty array
     return [];
+  }
+
+  // 检测是否为无意义的内容（如数字序列、乱码等）
+  isMeaninglessContent(content) {
+    if (!content || content.length === 0) return true;
+    
+    // 移除空白字符
+    const cleanContent = content.replace(/\s/g, '');
+    
+    // 如果内容太短，认为是无意义的
+    if (cleanContent.length < 10) return true;
+    
+    // 检查是否主要由数字组成（如 0201, 0304, 0506 这种模式）
+    const digitPattern = /^\d+$/;
+    const lines = content.split('\n').filter(line => line.trim());
+    let digitLines = 0;
+    let totalLines = lines.length;
+    
+    if (totalLines === 0) return true;
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.length > 0 && digitPattern.test(trimmedLine)) {
+        digitLines++;
+      }
+    }
+    
+    // 如果80%以上的行都是纯数字，认为是无意义的
+    if (digitLines / totalLines >= 0.8) {
+      console.log(`检测到数字序列内容: ${digitLines}/${totalLines} 行为纯数字`);
+      return true;
+    }
+    
+    // 检查是否主要由重复字符组成
+    const charCounts = {};
+    for (const char of cleanContent) {
+      charCounts[char] = (charCounts[char] || 0) + 1;
+    }
+    
+    const maxCharCount = Math.max(...Object.values(charCounts));
+    const repetitionRatio = maxCharCount / cleanContent.length;
+    
+    // 如果某个字符占比超过60%，认为是无意义的
+    if (repetitionRatio > 0.6) {
+      console.log(`检测到重复字符内容: 最高重复率 ${(repetitionRatio * 100).toFixed(1)}%`);
+      return true;
+    }
+    
+    // 检查是否包含正常的英文单词
+    const words = content.match(/[a-zA-Z]{3,}/g);
+    const normalWords = words ? words.length : 0;
+    const totalChars = cleanContent.length;
+    
+    // 如果几乎没有正常单词，可能是无意义内容
+    if (normalWords === 0 && totalChars > 20) {
+      console.log('检测到无英文单词的内容');
+      return true;
+    }
+    
+    return false;
   }
 
   extractStructuredText(content) {

@@ -21,15 +21,18 @@ module.exports = {
     images: ['.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff']
   },
   
-  // Supported languages
+  // Supported languages - 支持九种主要语言
   SUPPORTED_LANGUAGES: {
-    'zh-CN': '中文',
-    'en': 'English',
-    'es': 'Español',
-    'fr': 'Français',
-    'de': 'Deutsch',
-    'ja': '日本語',
-    'ko': '한국어'
+    'en': 'English (英语)',
+    'de': 'Deutsch (德语)',
+    'fr': 'Français (法语)',
+    'es': 'Español (西班牙语)',
+    'it': 'Italiano (意大利语)',
+    'nl': 'Nederlands (荷兰语)',
+    'pl': 'Polski (波兰语)',
+    'sv': 'Svenska (瑞典语)',
+    'ja': '日本語 (日语)',
+    'zh-CN': '中文 (简体中文)'
   },
   
   // Review categories
