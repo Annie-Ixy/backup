@@ -99,9 +99,13 @@ router.post('/api/design-review/upload', designReviewUpload.array('files', 10), 
 // Store active SSE connections
 const activeConnections = new Map();
 
+// Store processing status for polling fallback (similar to resume screening)
+const processingCache = new Map();
+
 // SSE endpoint for real-time progress updates
 router.get('/api/design-review/progress/:sessionId', (req, res) => {
   const sessionId = req.params.sessionId;
+  console.log(`SSE connection request received for session: ${sessionId}`);
   
   // Set SSE headers
   res.writeHead(200, {
@@ -114,9 +118,12 @@ router.get('/api/design-review/progress/:sessionId', (req, res) => {
 
   // Store connection
   activeConnections.set(sessionId, res);
+  console.log(`SSE connection stored for session: ${sessionId}`);
   
   // Send initial connection confirmation
-  res.write(`data: ${JSON.stringify({ type: 'connected', sessionId })}\n\n`);
+  const initialMessage = { type: 'connected', sessionId, timestamp: new Date().toISOString() };
+  res.write(`data: ${JSON.stringify(initialMessage)}\n\n`);
+  console.log(`Sent initial SSE message:`, initialMessage);
   
   // Handle client disconnect
   req.on('close', () => {
@@ -132,20 +139,62 @@ router.get('/api/design-review/progress/:sessionId', (req, res) => {
 
 // Helper function to send progress updates
 function sendProgressUpdate(sessionId, progressData) {
+  console.log(`Attempting to send progress update to session ${sessionId}:`, progressData);
+  
+  // Update processing cache for polling fallback
+  if (sessionId && processingCache.has(sessionId)) {
+    const cachedStatus = processingCache.get(sessionId);
+    const updatedStatus = {
+      ...cachedStatus,
+      ...progressData,
+      lastUpdate: new Date().toISOString()
+    };
+    processingCache.set(sessionId, updatedStatus);
+    console.log(`Updated processing cache for session ${sessionId}`);
+  }
+  
+  // Send SSE message if connection exists
   const connection = activeConnections.get(sessionId);
   if (connection) {
     try {
-      connection.write(`data: ${JSON.stringify({ type: 'progress', ...progressData })}\n\n`);
+      const message = { type: 'progress', ...progressData };
+      console.log(`Sending SSE message:`, message);
+      connection.write(`data: ${JSON.stringify(message)}\n\n`);
+      console.log(`Progress update sent successfully to session ${sessionId}`);
     } catch (error) {
       console.error(`Error sending progress update to session ${sessionId}:`, error);
       activeConnections.delete(sessionId);
     }
+  } else {
+    console.warn(`No active SSE connection found for session ${sessionId}, but cache updated`);
+    console.log(`Active connections:`, Array.from(activeConnections.keys()));
   }
 }
 
+// Add polling endpoint for status checking (fallback mechanism)
+router.get('/api/design-review/status/:sessionId', (req, res) => {
+  const { sessionId } = req.params;
+  const status = processingCache.get(sessionId);
+  
+  if (status) {
+    console.log(`Status check for session ${sessionId}:`, status);
+    res.json(status);
+  } else {
+    console.log(`No status found for session ${sessionId}`);
+    res.json({ 
+      status: 'not_found', 
+      message: 'Session not found or expired',
+      sessionId 
+    });
+  }
+});
+
 router.post('/api/design-review/process', async (req, res) => {
+  console.log(`\n=== Design Review Process Started ===`);
+  
   try {
     const { fileIds, language, reviewCategories, sessionId } = req.body;
+    console.log(`Extracted parameters:`, { fileIds, language, reviewCategories, sessionId });
     // Support both single language (string) and multiple languages (array)
     const targetLanguages = Array.isArray(language) ? language : [language || 'en'];
     
@@ -176,6 +225,22 @@ router.post('/api/design-review/process', async (req, res) => {
     
     const results = [];
     const totalFiles = fileIds.length;
+    
+    // Initialize processing cache with starting status
+    if (sessionId) {
+      processingCache.set(sessionId, {
+        status: 'processing',
+        fileIds,
+        totalFiles,
+        completedFiles: 0,
+        results: [],
+        overallProgress: 0,
+        currentFile: null,
+        stage: 'starting',
+        message: '开始处理文件...',
+        startTime: new Date().toISOString()
+      });
+    }
     
     for (let fileIndex = 0; fileIndex < fileIds.length; fileIndex++) {
       const fileId = fileIds[fileIndex];
@@ -241,13 +306,25 @@ router.post('/api/design-review/process', async (req, res) => {
         
         // Create progress callback for this file
         const progressCallback = sessionId ? (progressData) => {
+          console.log(`Progress callback called for file ${fileId}:`, progressData);
+          
+          // Calculate overall progress based on file progress and AI progress
+          let overallProgress = Math.round((fileIndex / totalFiles) * 100);
+          if (progressData.progress !== undefined) {
+            // Add AI progress within current file
+            overallProgress = Math.round(((fileIndex / totalFiles) * 100) + ((progressData.progress / totalFiles)));
+          }
+          
           sendProgressUpdate(sessionId, {
             fileIndex,
             totalFiles,
             currentFile: fileId,
+            overallProgress: Math.min(overallProgress, 100),
             ...progressData
           });
         } : null;
+        
+        console.log(`About to call AI reviewer with progressCallback:`, !!progressCallback);
         
         const reviewResult = await aiReviewer.reviewContent(
           processedData,
@@ -302,14 +379,23 @@ router.post('/api/design-review/process', async (req, res) => {
     
     // Send final completion
     if (sessionId) {
-      sendProgressUpdate(sessionId, {
+      const finalStatus = {
+        status: 'completed',
         stage: 'all_completed',
         progress: 100,
         message: '所有文件处理完成',
         totalFiles,
+        completedFiles: totalFiles,
+        results,
         successCount: results.filter(r => r.success).length,
-        errorCount: results.filter(r => !r.success).length
-      });
+        errorCount: results.filter(r => !r.success).length,
+        endTime: new Date().toISOString()
+      };
+      
+      // Update cache with final status
+      processingCache.set(sessionId, finalStatus);
+      
+      sendProgressUpdate(sessionId, finalStatus);
       
       // Close SSE connection after a short delay
       setTimeout(() => {
@@ -319,6 +405,12 @@ router.post('/api/design-review/process', async (req, res) => {
           connection.end();
           activeConnections.delete(sessionId);
         }
+        
+        // Keep cache for a while for polling fallback, then clean up
+        setTimeout(() => {
+          processingCache.delete(sessionId);
+          console.log(`Cleaned up cache for session ${sessionId}`);
+        }, 60000); // Keep for 1 minute after completion
       }, 1000);
     }
     

@@ -3,7 +3,7 @@ const config = require('../design-review-config');
 const sharp = require('sharp');
 const fs = require('fs').promises;
 const path = require('path');
-const Tesseract = require('tesseract.js');
+// const Tesseract = require('tesseract.js'); // No longer needed - using AI vision analysis
 
 class AIReviewer {
   constructor() {
@@ -28,6 +28,8 @@ class AIReviewer {
   }
 
   async reviewContent(processedData, targetLanguages, reviewCategories = ['basic', 'advanced'], progressCallback = null) {
+    console.log(`AI Reviewer called with progressCallback:`, !!progressCallback);
+    
     if (!this.openai) {
       throw new Error('OpenAI API key not configured');
     }
@@ -40,7 +42,10 @@ class AIReviewer {
 
     // Report initial progress
     if (progressCallback) {
+      console.log('Sending initial progress update...');
       progressCallback({ stage: 'starting', progress: 0, message: '开始内容分析...' });
+    } else {
+      console.warn('No progressCallback provided to AI reviewer');
     }
 
     try {
@@ -692,96 +697,8 @@ Return your response in JSON format with the following structure:
     return summary;
   }
 
-  async performOCR(imagePath) {
-    let preprocessedPath = null;
-    try {
-      // 1. Enhanced image preprocessing with better optimization for text
-      preprocessedPath = imagePath + '_preprocessed.png';
-      await sharp(imagePath)
-        .grayscale() // Convert to grayscale
-        .normalize() // Normalize the image contrast
-        .modulate({
-          brightness: 1.1,  // Slightly increase brightness
-          contrast: 1.2    // Increase contrast
-        })
-        .threshold(200) // Increased threshold for better text/background separation
-        .sharpen({ // Enhanced sharpening for better text clarity
-          sigma: 1.2,
-          m1: 1.0,
-          m2: 2.0,
-          x1: 2,
-          y2: 10,
-          y3: 15
-        })
-        .toFile(preprocessedPath);
-
-      // 2. Configure Tesseract with optimized settings
-      const result = await Tesseract.recognize(preprocessedPath, 'eng', {  // Changed to English only
-        logger: m => console.log(m),
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?()-_°()• ',
-        tessedit_pageseg_mode: '6',
-        tessedit_do_invert: '0',
-        language_model_penalty_non_dict_word: '0.8',
-        language_model_penalty_spacing: '0.5',
-        textord_heavy_nr: '1',
-        preserve_interword_spaces: '1',
-        tessedit_enable_dict_correction: '1',
-        tessedit_enable_bigram_correction: '1',
-        tessedit_write_images: '1',
-        tessedit_create_hocr: '1',
-        tessedit_ocr_engine_mode: '3',
-        load_system_dawg: '1',
-        load_freq_dawg: '1',
-        tessedit_char_blacklist: '{}[]|\\'
-      });
-
-      console.log('Original OCR text:', result.data.text);
-      console.log('OCR confidence:', result.data.confidence);
-      console.log('Number of words detected:', result.data.words.length);
-      
-      // 3. Process the OCR result with better debugging
-      let processedText = await this.processOCRResult(result.data);
-      console.log('After processOCRResult:', processedText);
-      
-      // 4. Apply bullet point fixes
-      processedText = this.fixBulletPoints(processedText);
-      console.log('After fixBulletPoints:', processedText);
-
-      // 5. Delete temporary file
-      await fs.unlink(preprocessedPath).catch(err => {
-        console.warn('Failed to delete temporary file:', err);
-      });
-
-      // 6. Return processed results with confidence score
-      return {
-        text: processedText,
-        confidence: result.data.confidence,
-        words: result.data.words.map(word => ({
-          text: word.text,
-          confidence: word.confidence,
-          bbox: word.bbox
-        }))
-      };
-    } catch (error) {
-      console.error('Enhanced OCR error:', error);
-      console.error('Error details:', error.stack);
-      
-      // Try to clean up temporary file even if OCR failed
-      if (preprocessedPath) {
-        try {
-          await fs.unlink(preprocessedPath);
-        } catch (unlinkError) {
-          console.warn('Failed to delete temporary file after error:', unlinkError);
-        }
-      }
-      
-      return {
-        text: '',
-        confidence: 0,
-        words: []
-      };
-    }
-  }
+  // OCR method removed - now using AI vision analysis for all images
+  // async performOCR() - method no longer needed as we use AI vision analysis
 
   // Helper method to fix bullet points
   fixBulletPoints(text) {

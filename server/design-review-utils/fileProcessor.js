@@ -4,7 +4,7 @@ const pdfParse = require('pdf-parse');
 const PDFParser = require('pdf2json');
 const { Poppler } = require('node-poppler');
 const sharp = require('sharp');
-const Tesseract = require('tesseract.js');
+// const Tesseract = require('tesseract.js'); // No longer needed - using AI vision analysis
 const xlsx = require('xlsx');
 const mammoth = require('mammoth');
 
@@ -278,45 +278,19 @@ class FileProcessor {
       };
       metadata.format = imageInfo.format;
 
-      // Enhanced image preprocessing for better OCR
-      const preprocessedPath = filePath + '_preprocessed.png';
-      await sharp(filePath)
-        .grayscale() // Convert to grayscale
-        .normalize() // Normalize the image contrast
-        .modulate({
-          brightness: 1.1,  // Slightly increase brightness
-          contrast: 1.2    // Increase contrast
-        })
-        .threshold(200) // Binarization for better text/background separation
-        .sharpen({ // Enhanced sharpening for better text clarity
-          sigma: 1.2,
-          m1: 1.0,
-          m2: 2.0,
-          x1: 2,
-          y2: 10,
-          y3: 15
-        })
-        .png({ quality: 100 }) // Save as high-quality PNG
-        .toFile(preprocessedPath);
-
-      // Convert to base64 for frontend display (use original image)
+      // Convert image to base64 for AI vision analysis
       const imageBuffer = await fs.readFile(filePath);
       const base64Image = imageBuffer.toString('base64');
 
-      // Perform OCR on preprocessed image
-      const ocrResult = await this.performOCR(preprocessedPath);
-
-      // Clean up preprocessed file
-      await fs.unlink(preprocessedPath).catch(err => {
-        console.warn('Failed to delete preprocessed file:', err);
-      });
+      console.log('Image processing: Using AI vision analysis instead of OCR');
 
       return {
         type: 'image',
         data: base64Image,
         metadata,
-        extractedText: ocrResult.text,
-        ocrConfidence: ocrResult.confidence
+        extractedText: '', // No OCR text, will use AI vision
+        ocrConfidence: 0,  // No OCR confidence
+        useVisionAnalysis: true // Force AI vision analysis
       };
     } catch (error) {
       console.error('Error processing image:', error);
@@ -324,41 +298,8 @@ class FileProcessor {
     }
   }
 
-  async performOCR(imagePath) {
-    try {
-      // Configure Tesseract with optimized settings for better accuracy
-      const result = await Tesseract.recognize(imagePath, 'eng', {
-        logger: m => console.log(m),
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?()-_°()• ',
-        tessedit_pageseg_mode: '6',
-        tessedit_do_invert: '0',
-        language_model_penalty_non_dict_word: '0.8',
-        language_model_penalty_spacing: '0.5',
-        textord_heavy_nr: '1',
-        preserve_interword_spaces: '1',
-        tessedit_enable_dict_correction: '1',
-        tessedit_enable_bigram_correction: '1',
-        tessedit_ocr_engine_mode: '3',
-        load_system_dawg: '1',
-        load_freq_dawg: '1',
-        tessedit_char_blacklist: '{}[]|\\'
-      });
-
-      console.log('OCR Confidence:', result.data.confidence);
-      console.log('OCR Text length:', result.data.text.length);
-
-      return {
-        text: result.data.text,
-        confidence: result.data.confidence
-      };
-    } catch (error) {
-      console.error('OCR error:', error);
-      return {
-        text: '',
-        confidence: 0
-      };
-    }
-  }
+  // OCR method removed - now using AI vision analysis for all images
+  // async performOCR() - method no longer needed as we use AI vision analysis
 
   async extractImagesFromPDF(pdfPath) {
     // This is a simplified version - in production, you'd use a library like pdf-lib or pdf-image
