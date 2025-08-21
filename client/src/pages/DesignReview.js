@@ -89,10 +89,15 @@ function DesignReview() {
     setProcessingStage('');
     setProcessingMessage('');
     setError(null);
+    
+    // 清空之前的结果，防止累积
+    setProcessResults([]);
 
     try {
       // 使用实时进度更新的API
       const fileIds = unprocessedFiles.map(file => file.id);
+      
+      let resultsAdded = false; // 防止重复添加结果
       
       const results = await designReviewApiService.processFilesWithProgress(
         fileIds, 
@@ -100,48 +105,84 @@ function DesignReview() {
         selectedCategories,
         (progressData) => {
           // 处理实时进度更新
-          console.log('Progress update:', progressData);
+          console.log('Progress update received from SSE:', progressData);
           
-          // 更新总体进度
-          if (progressData.overallProgress !== undefined) {
-            setProcessingProgress(progressData.overallProgress);
-          } else if (progressData.progress !== undefined) {
-            // 如果是单个文件的进度，计算总体进度
-            const fileIndex = progressData.fileIndex || 0;
-            const totalFiles = progressData.totalFiles || fileIds.length;
-            const fileProgress = progressData.progress || 0;
-            const overallProgress = Math.round(((fileIndex / totalFiles) * 100) + (fileProgress / totalFiles));
-            setProcessingProgress(Math.min(overallProgress, 100));
-          }
-          
-          // 更新当前处理文件信息
-          if (progressData.currentFile) {
-            const currentFile = unprocessedFiles.find(f => f.id === progressData.currentFile);
-            if (currentFile) {
-              setCurrentProcessingFile(currentFile.originalName);
+          // 只有在真正收到后端进度数据时才更新UI
+          if (progressData && typeof progressData === 'object') {
+            console.log('Processing progress data:', progressData);
+            
+            // 更新总体进度 - 支持多种进度数据格式
+            let newProgress = 0;
+            
+            if (progressData.overallProgress !== undefined) {
+              newProgress = progressData.overallProgress;
+              console.log('Using overallProgress:', newProgress);
+            } else if (progressData.progress !== undefined) {
+              // 如果是单个文件的进度，计算总体进度
+              const fileIndex = progressData.fileIndex || 0;
+              const totalFiles = progressData.totalFiles || fileIds.length;
+              const fileProgress = progressData.progress || 0;
+              newProgress = Math.round(((fileIndex / totalFiles) * 100) + (fileProgress / totalFiles));
+              console.log('Calculating overall progress from file progress:', { fileIndex, totalFiles, fileProgress, newProgress });
+            } else if (progressData.completedFiles !== undefined && progressData.totalFiles !== undefined) {
+              // 处理轮询返回的缓存数据格式
+              const completed = progressData.completedFiles || 0;
+              const total = progressData.totalFiles || 1;
+              newProgress = Math.round((completed / total) * 100);
+              console.log('Calculating progress from completed files:', { completed, total, newProgress });
             }
-          }
-          
-          // 更新处理阶段信息
-          if (progressData.stage) {
-            setProcessingStage(progressData.stage);
-          }
-          if (progressData.message) {
-            setProcessingMessage(progressData.message);
-            console.log('Processing stage:', progressData.stage, progressData.message);
+            
+            // 确保进度值合理
+            newProgress = Math.max(0, Math.min(100, newProgress));
+            setProcessingProgress(newProgress);
+            console.log('Set processing progress to:', newProgress);
+            
+            // 更新当前处理文件信息
+            if (progressData.currentFile) {
+              const currentFile = unprocessedFiles.find(f => f.id === progressData.currentFile);
+              if (currentFile) {
+                console.log('Updating current processing file:', currentFile.originalName);
+                setCurrentProcessingFile(currentFile.originalName);
+              }
+            }
+            
+            // 更新处理阶段信息
+            if (progressData.stage) {
+              console.log('Updating processing stage:', progressData.stage);
+              setProcessingStage(progressData.stage);
+            }
+            
+            if (progressData.message) {
+              console.log('Updating processing message:', progressData.message);
+              setProcessingMessage(progressData.message);
+            }
+            
+            // 只在第一次收到完成状态时添加结果，避免重复
+            if ((progressData.stage === 'all_completed' || progressData.status === 'completed') && !resultsAdded) {
+              console.log('Processing completed, adding results only once');
+              setCurrentProcessingFile('');
+              setProcessingMessage('所有文件处理完成！');
+              
+              // 如果有结果数据，添加到结果中
+              if (progressData.results && Array.isArray(progressData.results)) {
+                console.log('Adding results from progress data:', progressData.results);
+                setProcessResults(prevResults => [...prevResults, ...progressData.results]);
+                setActiveTab('review');
+                resultsAdded = true; // 标记已添加结果
+              }
+            }
           }
         }
       );
       
-      // 完成处理
-      setProcessingProgress(100);
-      setCurrentProcessingFile('');
-      setProcessingStage('completed');
-      setProcessingMessage('所有文件处理完成！');
+      // 如果通过progress callback没有添加结果，则使用函数返回的结果
+      if (!resultsAdded && results && Array.isArray(results)) {
+        console.log('Adding results from function return:', results);
+        setProcessResults(prevResults => [...prevResults, ...results]);
+        setActiveTab('review');
+      }
       
-      // 将新结果添加到现有结果中
-      setProcessResults(prevResults => [...prevResults, ...results]);
-      setActiveTab('review');
+      console.log('Processing function completed');
     } catch (err) {
       console.error('Processing error:', err);
       setError(err instanceof Error ? err.message : 'Processing failed');
