@@ -21,10 +21,12 @@ const getMimeType = (ext) => {
   return mimeTypes[ext] || null;
 };
 
-const DesignFileUpload = ({ onFilesSelected, acceptedFileTypes }) => {
+const DesignFileUpload = ({ onFilesSelected, acceptedFileTypes, disabled = false }) => {
   const onDrop = useCallback((acceptedFiles) => {
-    onFilesSelected(acceptedFiles);
-  }, [onFilesSelected]);
+    if (!disabled) {
+      onFilesSelected(acceptedFiles);
+    }
+  }, [onFilesSelected, disabled]);
 
   const allAcceptedTypes = [
     ...acceptedFileTypes.documents,
@@ -39,6 +41,7 @@ const DesignFileUpload = ({ onFilesSelected, acceptedFileTypes }) => {
       return acc;
     }, {}),
     multiple: true,
+    disabled,
   });
 
   const getFileIcon = (fileName) => {
@@ -53,17 +56,21 @@ const DesignFileUpload = ({ onFilesSelected, acceptedFileTypes }) => {
     <div className="w-full">
       <div {...getRootProps()}>
         <motion.div
-          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${
-            isDragActive
-              ? 'border-blue-500 bg-blue-50'
-              : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
+            disabled
+              ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+              : isDragActive
+                ? 'border-blue-500 bg-blue-50 cursor-pointer'
+                : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50 cursor-pointer'
           }`}
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.99 }}
+          whileHover={disabled ? {} : { scale: 1.01 }}
+          whileTap={disabled ? {} : { scale: 0.99 }}
         >
           <input {...getInputProps()} />
           <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-          {isDragActive ? (
+          {disabled ? (
+            <p className="text-lg font-medium text-gray-500">正在上传文件，请稍候...</p>
+          ) : isDragActive ? (
             <p className="text-lg font-medium text-blue-600">释放文件以上传...</p>
           ) : (
             <>

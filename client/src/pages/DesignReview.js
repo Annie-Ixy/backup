@@ -41,6 +41,11 @@ function DesignReview() {
   const [processingMessage, setProcessingMessage] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState(null);
+  
+  // 新增：上传进度相关状态
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingFiles, setUploadingFiles] = useState([]);
   let isLoginIndex = 0;
   
   useEffect(() => {
@@ -66,11 +71,35 @@ function DesignReview() {
 
   const handleFilesSelected = async (files) => {
     try {
-      const uploadedFileData = await designReviewApiService.uploadFiles(files);
+      setIsUploading(true);
+      setUploadProgress(0);
+      setUploadingFiles(files);
+      setError(null);
+      
+      const uploadedFileData = await designReviewApiService.uploadFiles(files, (progressEvent) => {
+        // 计算上传进度
+        const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        setUploadProgress(progress);
+        console.log(`Upload progress: ${progress}%`);
+      });
+      
+      // 上传完成
+      setUploadProgress(100);
+      
       // 追加新文件到现有文件列表，而不是替换
       setUploadedFiles(prevFiles => [...prevFiles, ...uploadedFileData]);
+      
+      console.log('Files uploaded successfully:', uploadedFileData);
     } catch (err) {
+      console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      // 延迟重置状态，让用户看到100%完成
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadProgress(0);
+        setUploadingFiles([]);
+      }, 1000);
     }
   };
 
@@ -700,7 +729,40 @@ function DesignReview() {
                           key={uploadComponentKey}
                           onFilesSelected={handleFilesSelected}
                           acceptedFileTypes={config.supportedFileTypes}
+                          disabled={isUploading}
                         />
+                      )}
+                      
+                      {/* 上传进度显示 */}
+                      {isUploading && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-blue-900">
+                              正在上传文件 ({uploadingFiles.length} 个)
+                            </span>
+                            <span className="text-sm text-blue-700">{uploadProgress}%</span>
+                          </div>
+                          <div className="w-full bg-blue-200 rounded-full h-2">
+                            <motion.div
+                              className="bg-blue-600 h-2 rounded-full"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${uploadProgress}%` }}
+                              transition={{ duration: 0.3 }}
+                            />
+                          </div>
+                          <div className="mt-2 text-xs text-blue-600">
+                            {uploadingFiles.map((file, index) => (
+                              <div key={index} className="flex items-center gap-1">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span>{file.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
                       )}
 
                       {uploadedFiles.length > 0 && (

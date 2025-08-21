@@ -11,8 +11,8 @@ export const designReviewApiService = {
     return response;
   },
 
-  // Upload files
-  uploadFiles: async (files) => {
+  // Upload files with progress tracking
+  uploadFiles: async (files, onUploadProgress = null) => {
     const formData = new FormData();
     files.forEach((file) => {
       formData.append('files', file);
@@ -22,6 +22,9 @@ export const designReviewApiService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      onUploadProgress: onUploadProgress ? (progressEvent) => {
+        onUploadProgress(progressEvent);
+      } : undefined,
     });
     return response.files;
   },
