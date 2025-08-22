@@ -4,7 +4,7 @@ const pdfParse = require('pdf-parse');
 const PDFParser = require('pdf2json');
 const { Poppler } = require('node-poppler');
 const sharp = require('sharp');
-const Tesseract = require('tesseract.js');
+// const Tesseract = require('tesseract.js'); // No longer needed - using AI vision analysis
 const xlsx = require('xlsx');
 const mammoth = require('mammoth');
 
@@ -132,9 +132,17 @@ class FileProcessor {
         }
         console.log('=== End PDF Debug ===\n');
         
-        // If no text extracted, convert to images for vision analysis
-        if (content.trim().length === 0) {
-          console.log('No text extracted. Converting PDF pages to images for GPT-4o vision analysis...');
+        // If no meaningful text extracted, convert to images for vision analysis
+        const finalTrimmedContent = content.trim();
+        const isMeaninglessContent = this.isMeaninglessContent(finalTrimmedContent);
+        
+        if (finalTrimmedContent.length === 0 || isMeaninglessContent) {
+          if (finalTrimmedContent.length === 0) {
+            console.log('No text extracted. Converting PDF pages to images for GPT-4o vision analysis...');
+          } else {
+            console.log(`Detected meaningless content (${finalTrimmedContent.length} chars). Converting PDF pages to images for GPT-4o vision analysis...`);
+            console.log('Content preview:', finalTrimmedContent.substring(0, 100));
+          }
           
           try {
             const outputDir = path.join(path.dirname(filePath), 'pdf_images_' + Date.now());
@@ -270,45 +278,19 @@ class FileProcessor {
       };
       metadata.format = imageInfo.format;
 
-      // Enhanced image preprocessing for better OCR
-      const preprocessedPath = filePath + '_preprocessed.png';
-      await sharp(filePath)
-        .grayscale() // Convert to grayscale
-        .normalize() // Normalize the image contrast
-        .modulate({
-          brightness: 1.1,  // Slightly increase brightness
-          contrast: 1.2    // Increase contrast
-        })
-        .threshold(200) // Binarization for better text/background separation
-        .sharpen({ // Enhanced sharpening for better text clarity
-          sigma: 1.2,
-          m1: 1.0,
-          m2: 2.0,
-          x1: 2,
-          y2: 10,
-          y3: 15
-        })
-        .png({ quality: 100 }) // Save as high-quality PNG
-        .toFile(preprocessedPath);
-
-      // Convert to base64 for frontend display (use original image)
+      // Convert image to base64 for AI vision analysis
       const imageBuffer = await fs.readFile(filePath);
       const base64Image = imageBuffer.toString('base64');
 
-      // Perform OCR on preprocessed image
-      const ocrResult = await this.performOCR(preprocessedPath);
-
-      // Clean up preprocessed file
-      await fs.unlink(preprocessedPath).catch(err => {
-        console.warn('Failed to delete preprocessed file:', err);
-      });
+      console.log('Image processing: Using AI vision analysis instead of OCR');
 
       return {
         type: 'image',
         data: base64Image,
         metadata,
-        extractedText: ocrResult.text,
-        ocrConfidence: ocrResult.confidence
+        extractedText: '', // No OCR text, will use AI vision
+        ocrConfidence: 0,  // No OCR confidence
+        useVisionAnalysis: true // Force AI vision analysis
       };
     } catch (error) {
       console.error('Error processing image:', error);
@@ -316,46 +298,73 @@ class FileProcessor {
     }
   }
 
-  async performOCR(imagePath) {
-    try {
-      // Configure Tesseract with optimized settings for better accuracy
-      const result = await Tesseract.recognize(imagePath, 'eng', {
-        logger: m => console.log(m),
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?()-_°()• ',
-        tessedit_pageseg_mode: '6',
-        tessedit_do_invert: '0',
-        language_model_penalty_non_dict_word: '0.8',
-        language_model_penalty_spacing: '0.5',
-        textord_heavy_nr: '1',
-        preserve_interword_spaces: '1',
-        tessedit_enable_dict_correction: '1',
-        tessedit_enable_bigram_correction: '1',
-        tessedit_ocr_engine_mode: '3',
-        load_system_dawg: '1',
-        load_freq_dawg: '1',
-        tessedit_char_blacklist: '{}[]|\\'
-      });
-
-      console.log('OCR Confidence:', result.data.confidence);
-      console.log('OCR Text length:', result.data.text.length);
-
-      return {
-        text: result.data.text,
-        confidence: result.data.confidence
-      };
-    } catch (error) {
-      console.error('OCR error:', error);
-      return {
-        text: '',
-        confidence: 0
-      };
-    }
-  }
+  // OCR method removed - now using AI vision analysis for all images
+  // async performOCR() - method no longer needed as we use AI vision analysis
 
   async extractImagesFromPDF(pdfPath) {
     // This is a simplified version - in production, you'd use a library like pdf-lib or pdf-image
     // For now, we'll return an empty array
     return [];
+  }
+
+  // 检测是否为无意义的内容（如数字序列、乱码等）
+  isMeaninglessContent(content) {
+    if (!content || content.length === 0) return true;
+    
+    // 移除空白字符
+    const cleanContent = content.replace(/\s/g, '');
+    
+    // 如果内容太短，认为是无意义的
+    if (cleanContent.length < 10) return true;
+    
+    // 检查是否主要由数字组成（如 0201, 0304, 0506 这种模式）
+    const digitPattern = /^\d+$/;
+    const lines = content.split('\n').filter(line => line.trim());
+    let digitLines = 0;
+    let totalLines = lines.length;
+    
+    if (totalLines === 0) return true;
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.length > 0 && digitPattern.test(trimmedLine)) {
+        digitLines++;
+      }
+    }
+    
+    // 如果80%以上的行都是纯数字，认为是无意义的
+    if (digitLines / totalLines >= 0.8) {
+      console.log(`检测到数字序列内容: ${digitLines}/${totalLines} 行为纯数字`);
+      return true;
+    }
+    
+    // 检查是否主要由重复字符组成
+    const charCounts = {};
+    for (const char of cleanContent) {
+      charCounts[char] = (charCounts[char] || 0) + 1;
+    }
+    
+    const maxCharCount = Math.max(...Object.values(charCounts));
+    const repetitionRatio = maxCharCount / cleanContent.length;
+    
+    // 如果某个字符占比超过60%，认为是无意义的
+    if (repetitionRatio > 0.6) {
+      console.log(`检测到重复字符内容: 最高重复率 ${(repetitionRatio * 100).toFixed(1)}%`);
+      return true;
+    }
+    
+    // 检查是否包含正常的英文单词
+    const words = content.match(/[a-zA-Z]{3,}/g);
+    const normalWords = words ? words.length : 0;
+    const totalChars = cleanContent.length;
+    
+    // 如果几乎没有正常单词，可能是无意义内容
+    if (normalWords === 0 && totalChars > 20) {
+      console.log('检测到无英文单词的内容');
+      return true;
+    }
+    
+    return false;
   }
 
   extractStructuredText(content) {

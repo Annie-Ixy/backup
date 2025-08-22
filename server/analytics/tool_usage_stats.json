@@ -1,0 +1,91 @@
+{
+  "home": {
+    "name": "首页",
+    "visitCount": 3,
+    "lastVisit": "2025-08-20T03:23:45.885Z",
+    "firstVisit": "2025-08-19T08:43:55.335Z",
+    "userVisits": {
+      "daven.dai@designlibro.com": 2,
+      "anonymous": 1
+    },
+    "dailyUserVisits": {
+      "daven.dai@designlibro.com": {
+        "2025-08-19": true,
+        "2025-08-20": true
+      },
+      "anonymous": {
+        "2025-08-20": true
+      }
+    }
+  },
+  "customer-service": {
+    "name": "客服工具",
+    "visitCount": 1,
+    "lastVisit": "2025-08-19T08:44:35.440Z",
+    "firstVisit": "2025-08-19T08:44:35.440Z",
+    "userVisits": {
+      "daven.dai@designlibro.com": 1
+    },
+    "dailyUserVisits": {
+      "daven.dai@designlibro.com": {
+        "2025-08-19": true
+      }
+    }
+  },
+  "design-review": {
+    "name": "设计审查",
+    "visitCount": 14,
+    "lastVisit": "2025-08-20T03:32:28.497Z",
+    "firstVisit": "2025-08-19T08:35:23.303Z",
+    "userVisits": {
+      "daven.dai@designlibro.com": 1,
+      "anonymous": 7
+    },
+    "dailyUserVisits": {
+      "daven.dai@designlibro.com": {
+        "2025-08-20": true
+      },
+      "anonymous": {
+        "2025-08-20": true
+      }
+    }
+  },
+  "questionnaire-analysis": {
+    "name": "问卷分析",
+    "visitCount": 1,
+    "lastVisit": "2025-08-19T08:43:19.393Z",
+    "firstVisit": "2025-08-19T08:43:19.393Z",
+    "userVisits": {
+      "daven.dai@designlibro.com": 1
+    },
+    "dailyUserVisits": {
+      "daven.dai@designlibro.com": {
+        "2025-08-19": true
+      }
+    }
+  },
+  "resume": {
+    "name": "简历分析",
+    "visitCount": 0,
+    "lastVisit": null,
+    "firstVisit": null,
+    "userVisits": {},
+    "dailyUserVisits": {}
+  },
+  "social-media": {
+    "name": "社媒分析",
+    "visitCount": 0,
+    "lastVisit": null,
+    "firstVisit": null,
+    "userVisits": {},
+    "dailyUserVisits": {}
+  },
+  "voice-cloning": {
+    "name": "语音克隆",
+    "visitCount": 0,
+    "lastVisit": null,
+    "firstVisit": null,
+    "userVisits": {},
+    "dailyUserVisits": {}
+  }
+}
