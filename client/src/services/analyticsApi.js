@@ -3,6 +3,9 @@ import request from '../utils/request';
 // 记录工具访问
 export const recordToolVisit = async (toolKey, username) => {
   console.log(`开始记录工具访问: ${toolKey}, 用户: ${username}`);
+  if (window.location.hostname.includes('localhost') || window.location.hostname.includes('dope-test')){
+    return console.log('localhost or dope-test not record');
+  } 
   try {
     const response = await request.post('/test/analytics/record-visit', {
       toolKey,
