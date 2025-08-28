@@ -36,7 +36,7 @@ export const customerServiceApi = {
     };
     
     try {
-      console.log('发送请求数据:', requestData);
+      console.log('发送请求数据1:', requestData);
       
       // 只使用代理方式
       const response = await api.post('/customer-service/ai/device/troubleshooting', requestData, {
